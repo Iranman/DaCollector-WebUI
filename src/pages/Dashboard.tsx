@@ -24,7 +24,7 @@ export default function Dashboard() {
         setVersion(v.Server.Version);
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
-          navigate('/setup');
+          navigate('/login');
         } else {
           setError(err instanceof Error ? err.message : 'Failed to load data.');
         }
@@ -34,64 +34,70 @@ export default function Dashboard() {
   }, [navigate]);
 
   return (
-    <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-100">Dashboard</h1>
-        {version && <p className="text-sm text-gray-500 mt-1">Server {version}</p>}
+    <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
+      <div className="flex items-baseline justify-between">
+        <h1 className="text-xl font-semibold text-white">Dashboard</h1>
+        {version && <span className="text-xs text-gray-500">Server {version}</span>}
       </div>
 
       {error && (
-        <div className="bg-red-900/30 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+        <div className="app-card rounded-md px-4 py-3 text-sm text-red-400 border-red-700/50">
           {error}
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="Status" value={status?.State ?? '—'} />
         <StatCard label="Uptime" value={status?.Uptime ?? '—'} />
         <StatCard label="Collections" value={String(collections.length)} />
       </div>
 
-      <div>
-        <h2 className="text-lg font-semibold text-gray-200 mb-4">Collections</h2>
+      <div className="app-card rounded-md">
+        <div className="flex items-center justify-between border-b border-gray-700/50 px-5 py-3">
+          <h2 className="text-sm font-semibold text-gray-200">Collections</h2>
+          <button
+            onClick={() => navigate('/collections')}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+          >
+            View all
+          </button>
+        </div>
+
         {collections.length === 0 ? (
-          <p className="text-gray-500 text-sm">
-            No collections yet.{' '}
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm text-gray-500">No collections configured.</p>
             <button
               onClick={() => navigate('/collections')}
-              className="text-indigo-400 hover:underline"
+              className="mt-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
             >
-              Create one
+              Go to Collections
             </button>
-          </p>
+          </div>
         ) : (
-          <div className="space-y-2">
+          <ul className="divide-y divide-gray-800/50">
             {collections.map(c => (
-              <div
-                key={c.ID}
-                className="bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 flex items-center justify-between"
-              >
+              <li key={c.ID} className="flex items-center justify-between px-5 py-3">
                 <div>
-                  <span className="font-medium text-gray-100">{c.Name}</span>
+                  <span className="text-sm font-medium text-gray-100">{c.Name}</span>
                   <span className="ml-3 text-xs text-gray-500">{c.SyncMode}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   {c.ItemCount != null && (
-                    <span className="text-sm text-gray-400">{c.ItemCount} items</span>
+                    <span className="text-xs text-gray-400">{c.ItemCount} items</span>
                   )}
                   <span
-                    className={`text-xs px-2 py-0.5 rounded-full ${
+                    className={`rounded-full px-2 py-0.5 text-xs ${
                       c.Enabled
-                        ? 'bg-green-900/50 text-green-400'
+                        ? 'bg-blue-600/20 text-blue-400'
                         : 'bg-gray-800 text-gray-500'
                     }`}
                   >
                     {c.Enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
       </div>
     </div>
@@ -100,9 +106,9 @@ export default function Dashboard() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4">
-      <p className="text-xs text-gray-500 uppercase tracking-wide">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-gray-100">{value}</p>
+    <div className="app-card rounded-md px-5 py-4">
+      <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
     </div>
   );
 }

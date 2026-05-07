@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth';
 import { setApiKey } from '../api/client';
+import Button from '../components/ui/Button';
+import TextInput from '../components/ui/TextInput';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -25,42 +27,41 @@ export default function Login() {
   }
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-950 text-gray-100">
-      <div className="w-full max-w-sm bg-gray-900 rounded-xl shadow-xl p-8 space-y-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-indigo-400">DaCollector</h1>
-          <p className="mt-1 text-sm text-gray-400">Sign in to your account.</p>
+    <div className="flex min-h-screen items-center justify-center px-6 text-gray-100">
+      <div className="app-surface w-full max-w-sm rounded-md p-8">
+        <div className="mb-8 text-center">
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-blue-500 text-lg font-semibold text-[#0d0d1a]">D</div>
+          <h1 className="mt-4 text-2xl font-semibold text-white">DaCollector</h1>
+          <p className="mt-2 text-sm text-gray-400">Sign in to your account.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
-            <input
+            <TextInput
               type="text"
               required
               autoFocus
               value={username}
               onChange={e => setUsername(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Password</label>
-            <input
+            <TextInput
               type="password"
               required
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
           {error && <p className="text-red-400 text-sm">{error}</p>}
-          <button
+          <Button
             type="submit"
             disabled={submitting}
-            className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-2 rounded-lg text-sm transition-colors"
+            className="w-full"
           >
             {submitting ? 'Signing in…' : 'Sign In'}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

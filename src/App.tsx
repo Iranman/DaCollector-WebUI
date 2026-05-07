@@ -30,8 +30,8 @@ export default function App() {
 
   if (appState === 'loading') {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-950">
-        <div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
       </div>
     );
   }
@@ -53,6 +53,7 @@ export default function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="collections" element={<Collections />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="settings/:section" element={<Settings />} />
         </Route>
         <Route
           path="*"

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { collectionsApi, CollectionSummary } from '../api/collections';
 import { ApiError } from '../api/client';
 import { useNavigate } from 'react-router-dom';
+import Button from '../components/ui/Button';
 
 export default function Collections() {
   const navigate = useNavigate();
@@ -17,7 +18,7 @@ export default function Collections() {
       setCollections(await collectionsApi.list());
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
-        navigate('/setup');
+        navigate('/login');
       } else {
         setError(err instanceof Error ? err.message : 'Failed to load collections.');
       }
@@ -50,76 +51,68 @@ export default function Collections() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-100">Collections</h1>
-        <button
-          onClick={load}
-          className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
-        >
-          Refresh
-        </button>
+        <h1 className="text-xl font-semibold text-white">Collection</h1>
+        <Button size="sm" variant="secondary" onClick={load}>Refresh</Button>
       </div>
 
       {error && (
-        <div className="bg-red-900/30 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-sm">
+        <div className="app-card rounded-md px-4 py-3 text-sm text-red-400 border-red-700/50">
           {error}
         </div>
       )}
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
         </div>
       ) : collections.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-gray-500">No collections configured.</p>
-          <p className="text-gray-600 text-sm mt-1">Collections are managed via the server configuration.</p>
+        <div className="app-card rounded-md px-5 py-16 text-center">
+          <p className="text-sm text-gray-500">No collections configured.</p>
+          <p className="mt-1 text-xs text-gray-600">Collections are managed via the server configuration.</p>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="app-card rounded-md divide-y divide-gray-800/50">
           {collections.map(c => (
-            <div
-              key={c.ID}
-              className="bg-gray-900 border border-gray-800 rounded-xl px-5 py-4"
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
-                    <h3 className="font-semibold text-gray-100 truncate">{c.Name}</h3>
-                    <span
-                      className={`shrink-0 text-xs px-2 py-0.5 rounded-full ${
-                        c.Enabled
-                          ? 'bg-green-900/50 text-green-400'
-                          : 'bg-gray-800 text-gray-500'
-                      }`}
-                    >
-                      {c.Enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                  </div>
-                  <div className="mt-1 flex gap-4 text-xs text-gray-500">
-                    <span>Mode: {c.SyncMode}</span>
-                    {c.ItemCount != null && <span>{c.ItemCount} items</span>}
-                    {c.LastSynced && (
-                      <span>Last sync: {new Date(c.LastSynced).toLocaleString()}</span>
-                    )}
-                  </div>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => handleSync(c.ID)}
-                    disabled={syncing === c.ID}
-                    className="text-xs px-3 py-1.5 bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 rounded-md text-white transition-colors"
+            <div key={c.ID} className="flex items-start justify-between gap-4 px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <h3 className="truncate text-sm font-medium text-gray-100">{c.Name}</h3>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                      c.Enabled
+                        ? 'bg-blue-600/20 text-blue-400'
+                        : 'bg-gray-800 text-gray-500'
+                    }`}
                   >
-                    {syncing === c.ID ? 'Syncing…' : 'Sync'}
-                  </button>
-                  <button
-                    onClick={() => handleDelete(c.ID, c.Name)}
-                    className="text-xs px-3 py-1.5 bg-gray-800 hover:bg-red-900/50 hover:text-red-400 rounded-md text-gray-400 transition-colors"
-                  >
-                    Delete
-                  </button>
+                    {c.Enabled ? 'Enabled' : 'Disabled'}
+                  </span>
                 </div>
+                <div className="mt-1 flex gap-4 text-xs text-gray-500">
+                  <span>Mode: {c.SyncMode}</span>
+                  {c.ItemCount != null && <span>{c.ItemCount} items</span>}
+                  {c.LastSynced && (
+                    <span>Last sync: {new Date(c.LastSynced).toLocaleString()}</span>
+                  )}
+                </div>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={syncing === c.ID}
+                  onClick={() => handleSync(c.ID)}
+                >
+                  {syncing === c.ID ? 'Syncing…' : 'Sync'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => handleDelete(c.ID, c.Name)}
+                >
+                  Delete
+                </Button>
               </div>
             </div>
           ))}
