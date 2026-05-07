@@ -1,0 +1,65 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Generate version.json
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          GIT_SHA="${GITHUB_SHA}"
+          DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          cat > dist/version.json <<EOF
+          {
+            "package": "${VERSION}",
+            "minimumServerVersion": "0.0.1",
+            "tag": "${TAG}",
+            "git": "${GIT_SHA}",
+            "date": "${DATE}",
+            "channel": "Stable"
+          }
+          EOF
+
+      - name: Create release zip
+        run: |
+          cd dist
+          zip -r "../dacollector-webui-${GITHUB_REF_NAME}.zip" .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: DaCollector WebUI ${{ github.ref_name }}
+          body: |
+            ## DaCollector WebUI ${{ github.ref_name }}
+
+            Minimum Server Version: **0.0.1**
+
+            ### Installation
+            The server will automatically download and install this release.
+          files: dacollector-webui-${{ github.ref_name }}.zip
+          fail_on_unmatched_files: true
