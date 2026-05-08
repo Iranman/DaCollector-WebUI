@@ -555,7 +555,7 @@ function UserManagementSection({
       <SettingGroup title="Password">
         <SettingsRow label="Password">
           <div className="flex justify-end">
-            <Button size="sm">Change</Button>
+            <Button size="sm" variant="secondary">Change</Button>
           </div>
         </SettingsRow>
         <SettingsRow label="New Password">
