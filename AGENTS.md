@@ -3,6 +3,11 @@
 ## Goal
 Rewrite the DaCollector WebUI to visually match **Shoko Server's web interface** as closely as possible. Study the design description below carefully — every detail matters. Do not invent new patterns; replicate Shoko's patterns exactly.
 
+## Product Boundary
+DaCollector WebUI is the browser interface for DaCollector Server. It should present setup, folder, provider, Plex target, collection, duplicate, missing/corrupt, and rename/move workflows by calling server APIs.
+
+Do not implement backend behavior in this repo. The WebUI must not scan folders directly, fingerprint files, match providers directly, manipulate local files, download media, stream from websites, or act as the Plex scanner/agent. DaCollector Relay is the planned Plex scanner/agent/adapter, and DaCollector Server remains the source of truth for media identity and state.
+
 ---
 
 ## Stack (do not change)

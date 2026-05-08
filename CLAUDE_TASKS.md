@@ -8,6 +8,8 @@ Context:
 - Do not add a UI framework or change Vite/TypeScript config.
 - Do not change `src/api/client.ts` auth behavior.
 - No backend/API changes in this repo. If a backend gap blocks a UI feature, record it as a backend follow-up instead of faking production behavior.
+- Product boundary: WebUI is only the browser interface for DaCollector Server. Do not add direct filesystem scanning, media fingerprinting, provider matching, local file rename/move execution, downloads, streaming, or Plex scanner/agent logic here.
+- DaCollector Relay is the planned Plex scanner/agent/adapter. WebUI may configure or monitor Relay through server APIs later, but Relay behavior belongs outside this repo.
 
 Status as of 2026-05-08:
 - P0-P7 are implemented and verified in the React WebUI.
