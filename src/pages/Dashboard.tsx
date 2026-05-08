@@ -1,27 +1,58 @@
 import { useEffect, useState } from 'react';
 import { initApi, ServerStatus } from '../api/init';
-import { collectionsApi, CollectionSummary } from '../api/collections';
+import { api } from '../api/client';
 import { ApiError } from '../api/client';
 import { useNavigate } from 'react-router-dom';
+
+interface CollectionStats {
+  FileCount: number;
+  FileSize: number;
+  SeriesCount: number;
+  GroupCount: number;
+  FinishedSeries: number;
+  WatchedEpisodes: number;
+  WatchedHours: number;
+  PercentDuplicate: number;
+  MissingEpisodes: number;
+  MissingEpisodesCollecting: number;
+  UnrecognizedFiles: number;
+  SeriesWithMissingLinks: number;
+  EpisodesWithMultipleFiles: number;
+  FilesWithDuplicateLocations: number;
+}
+
+function fmtBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<ServerStatus | null>(null);
-  const [collections, setCollections] = useState<CollectionSummary[]>([]);
+  const [stats, setStats] = useState<CollectionStats | null>(null);
   const [version, setVersion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [s, c, v] = await Promise.all([
+        const [s, v] = await Promise.all([
           initApi.getStatus(),
-          collectionsApi.list(),
           initApi.getVersion(),
         ]);
         setStatus(s);
-        setCollections(c);
         setVersion(v.Server.Version);
+
+        if (s.State === 'Started') {
+          try {
+            const st = await api.get<CollectionStats>('/api/v3/Dashboard/Stats');
+            setStats(st);
+          } catch {
+            // Stats are unavailable if the collection is empty or during startup — not a hard error
+          }
+        }
       } catch (err) {
         if (err instanceof ApiError && err.status === 401) {
           navigate('/login');
@@ -46,60 +77,50 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <StatCard label="Status" value={status?.State ?? '—'} />
         <StatCard label="Uptime" value={status?.Uptime ?? '—'} />
-        <StatCard label="Collections" value={String(collections.length)} />
+        <StatCard label="Series" value={stats ? String(stats.SeriesCount) : '—'} />
+        <StatCard label="Files" value={stats ? String(stats.FileCount) : '—'} />
       </div>
 
-      <div className="app-card rounded-md">
-        <div className="flex items-center justify-between border-b border-gray-700/50 px-5 py-3">
-          <h2 className="text-sm font-semibold text-gray-200">Collections</h2>
-          <button
-            onClick={() => navigate('/collections')}
-            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-          >
-            View all
-          </button>
-        </div>
-
-        {collections.length === 0 ? (
-          <div className="px-5 py-10 text-center">
-            <p className="text-sm text-gray-500">No collections configured.</p>
-            <button
-              onClick={() => navigate('/collections')}
-              className="mt-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              Go to Collections
-            </button>
+      {stats && (
+        <>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatCard label="Groups" value={String(stats.GroupCount)} />
+            <StatCard label="Watched" value={`${stats.WatchedHours}h`} />
+            <StatCard label="File Size" value={fmtBytes(stats.FileSize)} />
+            <StatCard label="Duplicates" value={`${stats.PercentDuplicate}%`} />
           </div>
-        ) : (
-          <ul className="divide-y divide-gray-800/50">
-            {collections.map(c => (
-              <li key={c.ID} className="flex items-center justify-between px-5 py-3">
-                <div>
-                  <span className="text-sm font-medium text-gray-100">{c.Name}</span>
-                  <span className="ml-3 text-xs text-gray-500">{c.SyncMode}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  {c.ItemCount != null && (
-                    <span className="text-xs text-gray-400">{c.ItemCount} items</span>
-                  )}
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs ${
-                      c.Enabled
-                        ? 'bg-blue-600/20 text-blue-400'
-                        : 'bg-gray-800 text-gray-500'
-                    }`}
-                  >
-                    {c.Enabled ? 'Enabled' : 'Disabled'}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="app-card rounded-md">
+              <div className="border-b border-gray-700/50 px-5 py-3">
+                <h2 className="text-sm font-semibold text-gray-200">Collection Health</h2>
+              </div>
+              <ul className="divide-y divide-gray-800/50">
+                <HealthRow label="Missing Episodes" value={stats.MissingEpisodes} warn={stats.MissingEpisodes > 0} />
+                <HealthRow label="Missing Episodes (Collecting)" value={stats.MissingEpisodesCollecting} warn={stats.MissingEpisodesCollecting > 0} />
+                <HealthRow label="Unrecognized Files" value={stats.UnrecognizedFiles} warn={stats.UnrecognizedFiles > 0} />
+                <HealthRow label="Series Missing Links" value={stats.SeriesWithMissingLinks} warn={stats.SeriesWithMissingLinks > 0} />
+                <HealthRow label="Episodes w/ Multiple Files" value={stats.EpisodesWithMultipleFiles} warn={stats.EpisodesWithMultipleFiles > 0} />
+                <HealthRow label="Duplicate File Locations" value={stats.FilesWithDuplicateLocations} warn={stats.FilesWithDuplicateLocations > 0} />
+              </ul>
+            </div>
+
+            <div className="app-card rounded-md">
+              <div className="border-b border-gray-700/50 px-5 py-3">
+                <h2 className="text-sm font-semibold text-gray-200">Watch Progress</h2>
+              </div>
+              <ul className="divide-y divide-gray-800/50">
+                <HealthRow label="Finished Series" value={stats.FinishedSeries} />
+                <HealthRow label="Watched Episodes" value={stats.WatchedEpisodes} />
+                <HealthRow label="Watch Hours" value={`${stats.WatchedHours}h`} />
+              </ul>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -110,5 +131,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
       <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
       <p className="mt-1 text-xl font-semibold text-white">{value}</p>
     </div>
+  );
+}
+
+function HealthRow({ label, value, warn }: { label: string; value: number | string; warn?: boolean }) {
+  return (
+    <li className="flex items-center justify-between px-5 py-2.5 text-sm">
+      <span className="text-gray-400">{label}</span>
+      <span className={warn ? 'text-yellow-400 font-medium' : 'text-gray-300'}>{value}</span>
+    </li>
   );
 }

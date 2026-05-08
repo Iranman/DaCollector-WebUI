@@ -191,9 +191,9 @@ export default function Settings() {
   }
 
   function toggleRelation(type: string, checked: boolean) {
-    const current = settings.Collection?.ExcludeRelationTypes ?? defaultExcludedRelations;
+    const current = settings.AutoGroupSeriesRelationExclusions ?? defaultExcludedRelations;
     const next = checked ? Array.from(new Set([...current, type])) : current.filter(item => item !== type);
-    updateSetting(['Collection', 'ExcludeRelationTypes'], next);
+    updateSetting(['AutoGroupSeriesRelationExclusions'], next);
   }
 
   const selectedUser = users.find(user => getUserId(user) === selectedUserId);
@@ -236,7 +236,7 @@ export default function Settings() {
 
             <div className="flex-1">
               {activeSection === 'general' && (
-                <GeneralSection settings={settings} updateSetting={updateSetting} />
+                <GeneralSection settings={settings} />
               )}
               {activeSection === 'import' && (
                 <ImportSection settings={settings} updateSetting={updateSetting} />
@@ -296,27 +296,15 @@ export default function Settings() {
 
 function GeneralSection({
   settings,
-  updateSetting,
 }: {
   settings: ServerSettings;
-  updateSetting: (path: string[], value: SettingValue) => void;
 }) {
   return (
     <div className="space-y-7">
       <SectionHeader title="General" description="Here you can find settings for version details, theme customization, notification management, and log configurations." />
       <SettingGroup title="Database Settings">
-        <SettingsRow label="SQLite Path">
-          <TextInput value={settings.Database?.SQLitePath ?? 'Default application data directory'} readOnly />
-        </SettingsRow>
-      </SettingGroup>
-      <SettingGroup title="Server Settings">
-        <SettingsRow label="Server Name">
-          <TextInput value={settings.Server?.Name ?? ''} onChange={e => updateSetting(['Server', 'Name'], e.target.value)} placeholder="DaCollector" />
-        </SettingsRow>
-        <SettingsRow label="Auto Update">
-          <div className="flex justify-end">
-            <Toggle checked={toBool(settings.Server?.AutoUpdate)} onChange={v => updateSetting(['Server', 'AutoUpdate'], v)} />
-          </div>
+        <SettingsRow label="Database Type">
+          <TextInput value={settings.Database?.Type ?? 'SQLite'} readOnly />
         </SettingsRow>
       </SettingGroup>
     </div>
@@ -334,11 +322,11 @@ function ImportSection({
     <div className="space-y-7">
       <SectionHeader title="Import" description="Configure how DaCollector imports files into your collection, including startup scans and quality checks." />
       <SettingGroup title="Import Options">
-        <ToggleRow label="Run on Start" checked={toBool(settings.Import?.RunOnStart, true)} onChange={v => updateSetting(['Import', 'RunOnStart'], v)} />
+        <ToggleRow label="Run on Start" checked={toBool(settings.Import?.RunOnStart)} onChange={v => updateSetting(['Import', 'RunOnStart'], v)} />
         <ToggleRow label="Scan Drop Folders on Start" checked={toBool(settings.Import?.ScanDropFoldersOnStart)} onChange={v => updateSetting(['Import', 'ScanDropFoldersOnStart'], v)} />
-        <ToggleRow label="File Quality Check" checked={toBool(settings.Import?.FileQualityCheck)} onChange={v => updateSetting(['Import', 'FileQualityCheck'], v)} />
-        <SettingsRow label="Max Auto-Import per Cycle">
-          <TextInput type="number" min={0} value={settings.Import?.MaxAutoScanFiles ?? 0} onChange={e => updateSetting(['Import', 'MaxAutoScanFiles'], Number(e.target.value))} />
+        <ToggleRow label="File Quality Check" checked={toBool(settings.FileQualityFilterEnabled)} onChange={v => updateSetting(['FileQualityFilterEnabled'], v)} />
+        <SettingsRow label="Max Auto-Scan Attempts per File">
+          <TextInput type="number" min={0} value={settings.Import?.MaxAutoScanAttemptsPerFile ?? 15} onChange={e => updateSetting(['Import', 'MaxAutoScanAttemptsPerFile'], Number(e.target.value))} />
         </SettingsRow>
       </SettingGroup>
     </div>
@@ -357,16 +345,13 @@ function AniDBSection({
       <SectionHeader title="AniDB" description="Configure inherited AniDB metadata and relation lookup settings used while the movie and TV conversion is completed." />
       <SettingGroup title="Login Options">
         <SettingsRow label="Username">
-          <TextInput value={settings.AniDB?.Username ?? ''} onChange={e => updateSetting(['AniDB', 'Username'], e.target.value)} />
+          <TextInput value={settings.AniDb?.Username ?? ''} onChange={e => updateSetting(['AniDb', 'Username'], e.target.value)} />
         </SettingsRow>
         <SettingsRow label="Password">
-          <TextInput type="password" value={settings.AniDB?.Password ?? ''} onChange={e => updateSetting(['AniDB', 'Password'], e.target.value)} />
+          <TextInput type="password" value={settings.AniDb?.Password ?? ''} onChange={e => updateSetting(['AniDb', 'Password'], e.target.value)} />
         </SettingsRow>
         <SettingsRow label="Client Port">
-          <TextInput type="number" min={1} value={settings.AniDB?.ClientPort ?? 4556} onChange={e => updateSetting(['AniDB', 'ClientPort'], Number(e.target.value))} />
-        </SettingsRow>
-        <SettingsRow label="Max Relations Depth">
-          <TextInput type="number" min={0} value={settings.AniDB?.MaxRelationDepth ?? 1} onChange={e => updateSetting(['AniDB', 'MaxRelationDepth'], Number(e.target.value))} />
+          <TextInput type="number" min={1} value={settings.AniDb?.ClientPort ?? 4556} onChange={e => updateSetting(['AniDb', 'ClientPort'], Number(e.target.value))} />
         </SettingsRow>
       </SettingGroup>
       <p className="text-sm text-gray-500">AniDB credentials are required for inherited metadata lookup.</p>
@@ -413,31 +398,29 @@ function CollectionSection({
   updateSetting: (path: string[], value: SettingValue) => void;
   toggleRelation: (type: string, checked: boolean) => void;
 }) {
-  const excluded = settings.Collection?.ExcludeRelationTypes ?? defaultExcludedRelations;
+  const excluded = settings.AutoGroupSeriesRelationExclusions ?? defaultExcludedRelations;
   return (
     <div className="space-y-7">
       <SectionHeader title="Collection" description="Set your preferred language for movies and TV series, and determine how DaCollector groups related titles within your collection." />
       <SettingGroup title="Language Options">
-        <SettingsRow label="Preferred Series Language">
-          <Select value={settings.Collection?.PreferredSeriesLanguage ?? 'English'} onChange={e => updateSetting(['Collection', 'PreferredSeriesLanguage'], e.target.value)}>
-            <option>English</option>
-            <option>Japanese</option>
-            <option>Spanish</option>
-            <option>French</option>
-          </Select>
+        <SettingsRow label="Series Title Language Order">
+          <TextInput
+            value={(settings.Language?.SeriesTitleLanguageOrder ?? ['x-main']).join(', ')}
+            onChange={e => updateSetting(['Language', 'SeriesTitleLanguageOrder'], e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+            placeholder="x-main, en, ja"
+          />
         </SettingsRow>
-        <SettingsRow label="Preferred Episode Language">
-          <Select value={settings.Collection?.PreferredEpisodeLanguage ?? 'English'} onChange={e => updateSetting(['Collection', 'PreferredEpisodeLanguage'], e.target.value)}>
-            <option>English</option>
-            <option>Japanese</option>
-            <option>Spanish</option>
-            <option>French</option>
-          </Select>
+        <SettingsRow label="Episode Title Language Order">
+          <TextInput
+            value={(settings.Language?.EpisodeTitleLanguageOrder ?? ['en']).join(', ')}
+            onChange={e => updateSetting(['Language', 'EpisodeTitleLanguageOrder'], e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+            placeholder="en, ja"
+          />
         </SettingsRow>
       </SettingGroup>
       <SettingGroup title="Relation Options">
-        <ToggleRow label="Auto Group Series" checked={toBool(settings.Collection?.AutoGroupSeries, true)} onChange={v => updateSetting(['Collection', 'AutoGroupSeries'], v)} />
-        <ToggleRow label="Determine Main Series Using Relation Weighing" checked={toBool(settings.Collection?.UseSeriesRelationGrouping, true)} onChange={v => updateSetting(['Collection', 'UseSeriesRelationGrouping'], v)} />
+        <ToggleRow label="Auto Group Series" checked={toBool(settings.AutoGroupSeries, true)} onChange={v => updateSetting(['AutoGroupSeries'], v)} />
+        <ToggleRow label="Determine Main Series Using Relation Weighing" checked={toBool(settings.AutoGroupSeriesUseScoreAlgorithm)} onChange={v => updateSetting(['AutoGroupSeriesUseScoreAlgorithm'], v)} />
         <div className="pt-2 text-sm text-gray-400">Exclude following relations</div>
         <div className="rounded-md bg-gray-950/60 p-3">
           {relationTypes.map(type => (
@@ -465,16 +448,16 @@ function IntegrationsSection({
             <Button variant="destructive" size="sm">Unlink</Button>
           </div>
         </SettingsRow>
-        <ToggleRow label="Enabled" checked={toBool(settings.Trakt?.Enabled)} onChange={v => updateSetting(['Trakt', 'Enabled'], v)} />
+        <ToggleRow label="Enabled" checked={toBool(settings.TraktTv?.Enabled)} onChange={v => updateSetting(['TraktTv', 'Enabled'], v)} />
         <SettingsRow label="Token valid until">
-          <div className="text-right text-sm text-gray-400">{settings.Trakt?.TokenValidUntil ?? 'Not linked'}</div>
+          <div className="text-right text-sm text-gray-400">{settings.TraktTv?.TokenExpirationDate ?? 'Not linked'}</div>
         </SettingsRow>
         <SettingsRow label="Sync Frequency">
-          <Select value={settings.Trakt?.SyncFrequency ?? 'Every 24 Hours'} onChange={e => updateSetting(['Trakt', 'SyncFrequency'], e.target.value)}>
-            <option>Every 6 Hours</option>
-            <option>Every 12 Hours</option>
-            <option>Every 24 Hours</option>
-            <option>Every 48 Hours</option>
+          <Select value={settings.TraktTv?.SyncFrequency ?? 'Daily'} onChange={e => updateSetting(['TraktTv', 'SyncFrequency'], e.target.value)}>
+            <option value="SixHours">Every 6 Hours</option>
+            <option value="TwelveHours">Every 12 Hours</option>
+            <option value="Daily">Every 24 Hours</option>
+            <option value="Weekly">Every Week</option>
           </Select>
         </SettingsRow>
       </SettingGroup>

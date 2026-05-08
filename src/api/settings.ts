@@ -1,11 +1,14 @@
 import { api } from './client';
 
 export interface ServerSettings {
-  AniDB?: {
+  AutoGroupSeries?: boolean;
+  AutoGroupSeriesRelationExclusions?: string[];
+  AutoGroupSeriesUseScoreAlgorithm?: boolean;
+  FileQualityFilterEnabled?: boolean;
+  AniDb?: {
     Username?: string;
     Password?: string;
     ClientPort?: number;
-    MaxRelationDepth?: number;
   };
   TMDB?: {
     ApiKey?: string;
@@ -27,37 +30,45 @@ export interface ServerSettings {
     MaxStaffImages?: number;
     DownloadStudioImages?: boolean;
   };
-  Plex?: {
-    Token?: string;
-  };
   Import?: {
     RunOnStart?: boolean;
     ScanDropFoldersOnStart?: boolean;
-    FileQualityCheck?: boolean;
-    MaxAutoScanFiles?: number;
+    MaxAutoScanAttemptsPerFile?: number;
   };
-  Collection?: {
-    AutoGroupSeries?: boolean;
-    UseSeriesRelationGrouping?: boolean;
-    ExcludeRelationTypes?: string[];
-    PreferredSeriesLanguage?: string;
-    PreferredEpisodeLanguage?: string;
+  Language?: {
+    SeriesTitleLanguageOrder?: string[];
+    EpisodeTitleLanguageOrder?: string[];
   };
-  Server?: {
-    Name?: string;
-    AutoUpdate?: boolean;
+  Plex?: {
+    Token?: string;
   };
-  Database?: {
-    SQLitePath?: string;
-  };
-  Trakt?: {
+  TraktTv?: {
     Enabled?: boolean;
-    TokenValidUntil?: string;
+    TokenExpirationDate?: string;
     SyncFrequency?: string;
   };
+  Database?: {
+    Type?: string;
+  };
+}
+
+type PatchOp = { op: 'replace'; path: string; value: unknown };
+
+function toPatch(obj: Record<string, unknown>, prefix = ''): PatchOp[] {
+  const ops: PatchOp[] = [];
+  for (const [key, value] of Object.entries(obj)) {
+    const path = `${prefix}/${key}`;
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      ops.push(...toPatch(value as Record<string, unknown>, path));
+    } else {
+      ops.push({ op: 'replace', path, value });
+    }
+  }
+  return ops;
 }
 
 export const settingsApi = {
   get: () => api.get<ServerSettings>('/api/v3/Settings'),
-  update: (body: Partial<ServerSettings>) => api.patch<ServerSettings>('/api/v3/Settings', body),
+  update: (settings: Partial<ServerSettings>) =>
+    api.patch<void>('/api/v3/Settings', toPatch(settings as Record<string, unknown>)),
 };
