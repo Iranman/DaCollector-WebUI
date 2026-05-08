@@ -8,6 +8,9 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Collections from './pages/Collections';
 import Settings from './pages/Settings';
+import Utilities from './pages/Utilities';
+import Log from './pages/Log';
+import Actions from './pages/Actions';
 
 type AppState = 'loading' | 'setup' | 'login' | 'ready';
 
@@ -54,6 +57,9 @@ export default function App() {
           <Route path="collections" element={<Collections />} />
           <Route path="settings" element={<Settings />} />
           <Route path="settings/:section" element={<Settings />} />
+          <Route path="utilities" element={<Utilities />} />
+          <Route path="log" element={<Log />} />
+          <Route path="actions" element={<Actions />} />
         </Route>
         <Route
           path="*"
