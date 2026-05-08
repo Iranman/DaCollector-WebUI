@@ -6,7 +6,6 @@ export interface User {
   Username?: string;
   DisplayName?: string;
   IsAdmin?: boolean | number;
-  IsAniDBUser?: boolean | number;
   IsTraktUser?: boolean | number;
   PlexUsers?: string;
 }
@@ -16,7 +15,6 @@ export interface UserUpdate {
   DisplayName?: string;
   Password?: string;
   IsAdmin?: boolean;
-  IsAniDBUser?: boolean;
   IsTraktUser?: boolean;
   PlexUsers?: string;
 }

@@ -79,7 +79,7 @@ This is the most important page to get right. Shoko's Settings is a **floating t
   │ │               │  │                              │  │
   │ │ General       │  │  <section title>             │  │
   │ │ Import        │  │  <section description>       │  │
-  │ │ AniDB         │  │                              │  │
+  │ │ TVDB          │  │                              │  │
   │ │ Metadata Sites│  │  <settings rows>             │  │
   │ │ Collection    │  │                              │  │
   │ │ Integrations  │  │  [Cancel]  [Save]            │  │
@@ -110,12 +110,12 @@ This is the most important page to get right. Shoko's Settings is a **floating t
 - "File Quality Check" toggle
 - "Max Auto-Import per Cycle" (number input, e.g. value `0` = unlimited)
 
-#### 3. AniDB
-- "Username" (text input)
-- "Password" (password input)
-- "Client Port" (number input, default `4556`)
-- "Max Relations Depth" (number input)
-- Note label: AniDB credentials are required for metadata lookup.
+#### 3. TVDB
+- "Enabled" toggle
+- "API Key" (password input)
+- "Subscriber PIN" (password input)
+- "Cache Expiration Days" (number input, default `7`)
+- Note label: TVDB requires an API key before TVDB collection builders can fetch provider data.
 
 #### 4. Metadata Sites
 - **TMDB Options**:
@@ -162,7 +162,6 @@ This is the most important page to get right. Shoko's Settings is a **floating t
   - "Pick Avatar" button
   - "Display Name" text input
   - "Administrator" toggle
-  - "AniDB User" toggle
   - "Trakt User" toggle
   - "Plex Users" — text input (comma-separated Plex usernames)
 - **Password**:
@@ -290,7 +289,6 @@ Same card layout as Setup. Fields: Username, Password. "Sign In" button. No chan
 - The existing `src/api/settings.ts` type `ServerSettings` needs to be **expanded** to cover all the new settings fields:
   ```ts
   interface ServerSettings {
-    AniDB?: { Username?: string; Password?: string; ClientPort?: number; MaxRelationDepth?: number; };
     TMDB?: {
       AutoLink?: boolean; AutoLinkRestricted?: boolean; IncludeRestricted?: boolean;
       DownloadCrewAndCast?: boolean; DownloadMovieCollections?: boolean;
@@ -299,6 +297,7 @@ Same card layout as Setup. Fields: Username, Password. "Sign In" button. No chan
       DownloadEpisodeThumbnails?: boolean; MaxEpisodeThumbnails?: number;
       DownloadStaffImages?: boolean; MaxStaffImages?: number; DownloadStudioImages?: boolean;
     };
+    TVDB?: { Enabled?: boolean; ApiKey?: string; Pin?: string; CacheExpirationDays?: number; };
     Plex?: { Token?: string; };
     Import?: { RunOnStart?: boolean; ScanDropFoldersOnStart?: boolean; MaxAutoScanFiles?: number; };
     Collection?: {

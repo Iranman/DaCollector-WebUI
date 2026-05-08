@@ -10,8 +10,6 @@ export const actionsApi = {
   updateAllTmdbMovies: () => api.get<void>('/api/v3/Action/UpdateAllTmdbMovies'),
   removeMissingFiles: (removeFromMyList = true) =>
     api.get<void>(`/api/v3/Action/RemoveMissingFiles/${removeFromMyList}`),
-  syncMyList: () => api.get<void>('/api/v3/Action/SyncMyList'),
-  updateAllAniDBInfo: () => api.get<void>('/api/v3/Action/UpdateAllAniDBInfo'),
   updateAllMediaInfo: () => api.get<void>('/api/v3/Action/UpdateAllMediaInfo'),
   updateSeriesStats: () => api.get<void>('/api/v3/Action/UpdateSeriesStats'),
   recreateAllGroups: () => api.get<void>('/api/v3/Action/RecreateAllGroups'),

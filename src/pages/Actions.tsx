@@ -60,7 +60,7 @@ const ACTION_GROUPS: { title: string; actions: ActionDef[] }[] = [
       {
         id: 'search-tmdb',
         label: 'Search for TMDB Matches',
-        description: 'Auto-match unlinked AniDB anime to TMDB shows and movies.',
+        description: 'Auto-match unlinked movies and TV shows to TMDB metadata.',
         fn: actionsApi.searchForTmdbMatches,
       },
       {
@@ -80,25 +80,6 @@ const ACTION_GROUPS: { title: string; actions: ActionDef[] }[] = [
         label: 'Download Missing TMDB People',
         description: 'Fetch any missing cast and crew data from TMDB.',
         fn: actionsApi.downloadMissingTmdbPeople,
-      },
-    ],
-  },
-  {
-    title: 'AniDB',
-    actions: [
-      {
-        id: 'sync-mylist',
-        label: 'Sync MyList',
-        description: 'Sync all watch states to AniDB MyList. One-way from DaCollector to AniDB.',
-        fn: actionsApi.syncMyList,
-        destructive: true,
-      },
-      {
-        id: 'update-anidb-info',
-        label: 'Update All AniDB Info',
-        description: 'Refresh all AniDB anime and episode metadata.',
-        fn: actionsApi.updateAllAniDBInfo,
-        destructive: true,
       },
     ],
   },

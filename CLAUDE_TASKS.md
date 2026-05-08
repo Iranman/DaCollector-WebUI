@@ -9,6 +9,17 @@ Context:
 - Do not change `src/api/client.ts` auth behavior.
 - No backend/API changes in this repo. If a backend gap blocks a UI feature, record it as a backend follow-up instead of faking production behavior.
 
+Status as of 2026-05-08:
+- P0-P7 are implemented and verified in the React WebUI.
+- `/settings` now redirects to `/settings/general`, while `/settings/:section` still drives the active settings section.
+- Collections now use the real `/api/v3/ManagedCollection` backend contract and include add, edit, preview, sync dry-run, and delete controls.
+- `npm run build` passes.
+- Vite route smoke passed for `/setup`, `/login`, `/dashboard`, `/collections`, `/settings`, `/settings/general`, `/settings/api-keys`, and `/settings/user-management`.
+- Playwright/Chrome screenshot review passed for desktop protected pages and mobile dashboard/settings/collections layouts.
+- Mobile Settings was adjusted to collapse the two-column settings panel into a stacked layout.
+- Provider scope is TMDB and TVDB only; do not add or restore legacy anime-only provider WebUI/settings/actions.
+- Provider cleanup is complete in this repo: Settings, Actions, User Management, and agent docs now expose only TMDB and TVDB.
+
 Reference material:
 - User screenshots: `f:/pictures/Screenshots/Screenshot 2026-05-07 144122.png` through `Screenshot 2026-05-07 144354.png`
 - Shoko docs reference: `https://docs.shokoanime.com/getting-started/running-shoko-server`
@@ -20,7 +31,7 @@ Reference material:
 
 ---
 
-## P0 — Preserve Scope and Baseline
+## P0 — Preserve Scope and Baseline — DONE
 
 Tasks:
 - Read `AGENTS.md` before coding.
@@ -47,7 +58,7 @@ Acceptance criteria:
 
 ---
 
-## P1 — Shoko Theme Foundation
+## P1 — Shoko Theme Foundation — DONE
 
 Files:
 - `tailwind.config.js`
@@ -79,7 +90,7 @@ Acceptance criteria:
 
 ---
 
-## P2 — Rewrite Layout to Shoko Top Navbar
+## P2 — Rewrite Layout to Shoko Top Navbar — DONE
 
 Files:
 - `src/components/Layout.tsx`
@@ -106,7 +117,7 @@ Acceptance criteria:
 
 ---
 
-## P3 — Restyle Setup and Login First
+## P3 — Restyle Setup and Login First — DONE
 
 Files:
 - `src/pages/Setup.tsx`
@@ -130,7 +141,7 @@ Acceptance criteria:
 
 ---
 
-## P4 — Rewrite Settings Page
+## P4 — Rewrite Settings Page — DONE
 
 Files:
 - `src/pages/Settings.tsx`
@@ -146,7 +157,7 @@ Implementation sub-order within P4:
 3. `src/api/settings.ts` — expand `ServerSettings` type
 4. `Settings.tsx` shell — two-column panel + left nav routing (no section content yet, just stubs)
 5. General section
-6. AniDB section
+6. TVDB section
 7. Metadata Sites section
 8. Collection section
 9. Integrations section
@@ -164,7 +175,7 @@ Tasks:
 - Sections:
   - General
   - Import
-  - AniDB
+  - TVDB
   - Metadata Sites
   - Collection
   - Integrations
@@ -186,7 +197,7 @@ Acceptance criteria:
 
 ---
 
-## P5 — Dashboard Restyle
+## P5 — Dashboard Restyle — DONE
 
 Files:
 - `src/pages/Dashboard.tsx`
@@ -208,7 +219,7 @@ Acceptance criteria:
 
 ---
 
-## P6 — Collections Restyle
+## P6 — Collections Restyle — DONE
 
 Files:
 - `src/pages/Collections.tsx`
@@ -222,9 +233,14 @@ Acceptance criteria:
 - Existing collection create/edit/preview behavior is preserved.
 - Page shares the same top navbar and dark card style.
 
+Completion notes:
+- The initial React Collections page only exposed list, refresh, sync, and delete; add/edit/preview were present in the legacy static server UI, not the React page.
+- React Collections now calls `/api/v3/ManagedCollection`, matching the server controller.
+- Added Shoko-style add/edit modal, saved/unsaved preview support, sync dry-run, and delete.
+
 ---
 
-## P7 — Build, Browser Review, and Handoff
+## P7 — Build, Browser Review, and Handoff — DONE
 
 Tasks:
 - Run:
@@ -247,6 +263,20 @@ Acceptance criteria:
 - `npm run build` succeeds with zero TypeScript errors.
 - Visual design is recognizably Shoko-like while branded as DaCollector.
 - Any backend endpoint that is missing or returns unexpected shape must be listed as a follow-up note at the bottom of this file — do not fake or stub the data silently.
+
+Verification notes:
+- `npm run build` passed on 2026-05-08.
+- Vite route smoke passed on 2026-05-08 for the required routes plus `/settings/general`.
+- Playwright/Chrome screenshot review completed on 2026-05-08.
+- Protected-page screenshots used local storage key `dacollector_apikey=visual-review-token` so the app rendered dashboard, collections, and settings views without a live backend.
+- Screenshots were written under the Windows temp directory:
+  - `dacollector-webui-auth-screens-20260508-123622`
+  - `dacollector-webui-fixed-screens-20260508-124251`
+  - `dacollector-webui-final-screens-20260508-124545`
+
+Backend/API notes:
+- No missing backend endpoint was found for Collections after switching from `/api/v3/Collection` to `/api/v3/ManagedCollection`.
+- Vite-only screenshots show `404 Not Found` on data-backed pages when no backend is running; this is expected for dev-only visual review.
 
 ---
 

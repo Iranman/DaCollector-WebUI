@@ -5,11 +5,6 @@ export interface ServerSettings {
   AutoGroupSeriesRelationExclusions?: string[];
   AutoGroupSeriesUseScoreAlgorithm?: boolean;
   FileQualityFilterEnabled?: boolean;
-  AniDb?: {
-    Username?: string;
-    Password?: string;
-    ClientPort?: number;
-  };
   TMDB?: {
     ApiKey?: string;
     AutoLink?: boolean;
@@ -29,6 +24,12 @@ export interface ServerSettings {
     DownloadStaffImages?: boolean;
     MaxStaffImages?: number;
     DownloadStudioImages?: boolean;
+  };
+  TVDB?: {
+    Enabled?: boolean;
+    ApiKey?: string;
+    Pin?: string;
+    CacheExpirationDays?: number;
   };
   Import?: {
     RunOnStart?: boolean;

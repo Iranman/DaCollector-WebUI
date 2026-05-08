@@ -14,7 +14,7 @@ import Toggle from '../components/ui/Toggle';
 type SectionId =
   | 'general'
   | 'import'
-  | 'anidb'
+  | 'tvdb'
   | 'metadata-sites'
   | 'collection'
   | 'integrations'
@@ -26,7 +26,7 @@ type SettingValue = string | number | boolean | string[] | undefined;
 const sections: Array<{ id: SectionId; label: string }> = [
   { id: 'general', label: 'General' },
   { id: 'import', label: 'Import' },
-  { id: 'anidb', label: 'AniDB' },
+  { id: 'tvdb', label: 'TVDB' },
   { id: 'metadata-sites', label: 'Metadata Sites' },
   { id: 'collection', label: 'Collection' },
   { id: 'integrations', label: 'Integrations' },
@@ -207,17 +207,17 @@ export default function Settings() {
   }
 
   return (
-    <div className="px-6 py-8">
+    <div className="px-4 py-6 sm:px-6 sm:py-8">
       <div className="mx-auto max-w-5xl">
-        <form onSubmit={handleSave} className="app-surface flex min-h-[42rem] overflow-hidden rounded-none">
-          <aside className="w-52 shrink-0 border-r border-gray-700/50 bg-[#0d0d1a]/70 py-5">
+        <form onSubmit={handleSave} className="app-surface flex flex-col overflow-hidden rounded-none md:min-h-[42rem] md:flex-row">
+          <aside className="w-full shrink-0 border-b border-gray-700/50 bg-[#0d0d1a]/70 py-5 md:w-52 md:border-b-0 md:border-r">
             <h1 className="px-6 pb-5 text-xl font-semibold text-white">Settings</h1>
-            <nav className="space-y-1">
+            <nav className="grid grid-cols-2 gap-1 sm:grid-cols-4 md:block md:space-y-1">
               {sections.map(item => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => navigate(item.id === 'general' ? '/settings' : `/settings/${item.id}`)}
+                  onClick={() => navigate(`/settings/${item.id}`)}
                   className={`block w-full border-l-2 px-6 py-2.5 text-left text-sm transition-colors ${
                     activeSection === item.id
                       ? 'border-blue-500 bg-blue-600/20 text-white'
@@ -230,7 +230,7 @@ export default function Settings() {
             </nav>
           </aside>
 
-          <section className="flex min-w-0 flex-1 flex-col bg-[#0d0d1a]/55 p-8">
+          <section className="flex min-w-0 flex-1 flex-col bg-[#0d0d1a]/55 p-5 sm:p-8">
             {error && <Alert tone="error">{error}</Alert>}
             {saved && <Alert tone="success">Settings saved.</Alert>}
 
@@ -241,8 +241,8 @@ export default function Settings() {
               {activeSection === 'import' && (
                 <ImportSection settings={settings} updateSetting={updateSetting} />
               )}
-              {activeSection === 'anidb' && (
-                <AniDBSection settings={settings} updateSetting={updateSetting} />
+              {activeSection === 'tvdb' && (
+                <TVDBSection settings={settings} updateSetting={updateSetting} />
               )}
               {activeSection === 'metadata-sites' && (
                 <MetadataSitesSection settings={settings} updateSetting={updateSetting} />
@@ -278,7 +278,7 @@ export default function Settings() {
             </div>
 
             {!['api-keys', 'user-management'].includes(activeSection) && (
-              <div className="mt-8 flex justify-end gap-3 border-t border-gray-700/50 pt-5">
+              <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-gray-700/50 pt-5">
                 <Button variant="secondary" onClick={() => window.location.reload()}>
                   Cancel
                 </Button>
@@ -333,7 +333,7 @@ function ImportSection({
   );
 }
 
-function AniDBSection({
+function TVDBSection({
   settings,
   updateSetting,
 }: {
@@ -342,19 +342,20 @@ function AniDBSection({
 }) {
   return (
     <div className="space-y-7">
-      <SectionHeader title="AniDB" description="Configure inherited AniDB metadata and relation lookup settings used while the movie and TV conversion is completed." />
-      <SettingGroup title="Login Options">
-        <SettingsRow label="Username">
-          <TextInput value={settings.AniDb?.Username ?? ''} onChange={e => updateSetting(['AniDb', 'Username'], e.target.value)} />
+      <SectionHeader title="TVDB" description="Configure TVDB lookup for movie and TV collection builders." />
+      <SettingGroup title="Provider Options">
+        <ToggleRow label="Enabled" checked={toBool(settings.TVDB?.Enabled)} onChange={v => updateSetting(['TVDB', 'Enabled'], v)} />
+        <SettingsRow label="API Key">
+          <TextInput type="password" value={settings.TVDB?.ApiKey ?? ''} onChange={e => updateSetting(['TVDB', 'ApiKey'], e.target.value)} />
         </SettingsRow>
-        <SettingsRow label="Password">
-          <TextInput type="password" value={settings.AniDb?.Password ?? ''} onChange={e => updateSetting(['AniDb', 'Password'], e.target.value)} />
+        <SettingsRow label="Subscriber PIN">
+          <TextInput type="password" value={settings.TVDB?.Pin ?? ''} onChange={e => updateSetting(['TVDB', 'Pin'], e.target.value)} />
         </SettingsRow>
-        <SettingsRow label="Client Port">
-          <TextInput type="number" min={1} value={settings.AniDb?.ClientPort ?? 4556} onChange={e => updateSetting(['AniDb', 'ClientPort'], Number(e.target.value))} />
+        <SettingsRow label="Cache Expiration Days">
+          <TextInput type="number" min={1} max={365} value={settings.TVDB?.CacheExpirationDays ?? 7} onChange={e => updateSetting(['TVDB', 'CacheExpirationDays'], Number(e.target.value))} />
         </SettingsRow>
       </SettingGroup>
-      <p className="text-sm text-gray-500">AniDB credentials are required for inherited metadata lookup.</p>
+      <p className="text-sm text-gray-500">TVDB requires an API key before TVDB collection builders can fetch provider data.</p>
     </div>
   );
 }
@@ -531,7 +532,6 @@ function UserManagementSection({
         </SettingsRow>
         <ReadOnlyUserRow label="Display Name" value={selectedUser?.DisplayName ?? selectedUser?.Username ?? ''} />
         <ReadOnlyToggleRow label="Administrator" value={selectedUser?.IsAdmin} />
-        <ReadOnlyToggleRow label="AniDB User" value={selectedUser?.IsAniDBUser} />
         <ReadOnlyToggleRow label="Trakt User" value={selectedUser?.IsTraktUser} />
         <ReadOnlyUserRow label="Plex Users" value={selectedUser?.PlexUsers ?? ''} />
       </SettingGroup>

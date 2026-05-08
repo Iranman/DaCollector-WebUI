@@ -35,7 +35,14 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     let message = res.statusText;
     try {
       const body = await res.json();
-      message = body?.detail ?? body?.title ?? body ?? message;
+      if (body?.detail || body?.title) {
+        message = body.detail ?? body.title;
+      } else if (typeof body === 'string' && body.trim()) {
+        message = body;
+      } else {
+        const serialized = JSON.stringify(body);
+        message = serialized && serialized !== '{}' ? serialized : `${res.status} ${res.statusText}`.trim();
+      }
     } catch {
       /* ignore */
     }

@@ -55,7 +55,7 @@ export default function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="collections" element={<Collections />} />
-          <Route path="settings" element={<Settings />} />
+          <Route path="settings" element={<Navigate to="/settings/general" replace />} />
           <Route path="settings/:section" element={<Settings />} />
           <Route path="utilities" element={<Utilities />} />
           <Route path="log" element={<Log />} />
