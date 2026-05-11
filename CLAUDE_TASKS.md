@@ -11,7 +11,7 @@ Context:
 - Product boundary: WebUI is only the browser interface for DaCollector Server. Do not add direct filesystem scanning, media fingerprinting, provider matching, local file rename/move execution, downloads, streaming, or Plex scanner/agent logic here.
 - DaCollector Relay is the planned Plex scanner/agent/adapter. WebUI may configure or monitor Relay through server APIs later, but Relay behavior belongs outside this repo.
 
-Status as of 2026-05-08:
+Status as of 2026-05-11:
 - P0-P7 are implemented and verified in the React WebUI.
 - `/settings` now redirects to `/settings/general`, while `/settings/:section` still drives the active settings section.
 - Collections now use the real `/api/v3/ManagedCollection` backend contract and include add, edit, preview, sync dry-run, and delete controls.
@@ -279,6 +279,28 @@ Verification notes:
 Backend/API notes:
 - No missing backend endpoint was found for Collections after switching from `/api/v3/Collection` to `/api/v3/ManagedCollection`.
 - Vite-only screenshots show `404 Not Found` on data-backed pages when no backend is running; this is expected for dev-only visual review.
+
+---
+
+## P8 — Surface Server MVP Endpoints in WebUI — DONE
+
+Status: implemented 2026-05-11, `npm run build` passes (0 TypeScript errors).
+
+### New API clients
+- `src/api/parser.ts` — `parserApi.parseFilename(path)`
+- `src/api/fileReview.ts` — full file review + candidate approve/reject API
+- `src/api/media.ts` — `mediaApi.getMovies`, `mediaApi.getShows` with provider/search/page
+
+### New pages
+- `src/pages/Parser.tsx` (`/parser`) — text input → parse → shows Kind badge, all parsed fields, warnings
+- `src/pages/Media.tsx` (`/media`) — Movies/Shows tabs, provider filter (TMDB/TVDB/All), search, pagination
+- `src/pages/FileReview.tsx` (`/files`) — unmatched file list, expand-to-view parsed info + candidates, per-file Ignore/Scan actions, candidate Approve/Reject with confidence bar
+
+### Nav changes (`src/components/Layout.tsx`)
+Added to nav: Library (`/media`), Files (`/files`), Parser (`/parser`)
+
+### Route changes (`src/App.tsx`)
+Added routes: `media`, `files`, `parser`
 
 ---
 

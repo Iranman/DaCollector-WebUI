@@ -9,12 +9,18 @@ import {
   Wrench,
   ScrollText,
   Zap,
+  Film,
+  FolderSearch,
+  ScanLine,
 } from 'lucide-react';
 import { clearApiKey } from '../api/client';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-  { to: '/collections', label: 'Collection', Icon: Library },
+  { to: '/media', label: 'Library', Icon: Film },
+  { to: '/files', label: 'Files', Icon: FolderSearch },
+  { to: '/collections', label: 'Collections', Icon: Library },
+  { to: '/parser', label: 'Parser', Icon: ScanLine },
   { to: '/utilities', label: 'Utilities', Icon: Wrench },
   { to: '/log', label: 'Log', Icon: ScrollText },
   { to: '/actions', label: 'Actions', Icon: Zap },

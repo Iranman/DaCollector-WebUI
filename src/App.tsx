@@ -11,6 +11,9 @@ import Settings from './pages/Settings';
 import Utilities from './pages/Utilities';
 import Log from './pages/Log';
 import Actions from './pages/Actions';
+import Media from './pages/Media';
+import FileReview from './pages/FileReview';
+import Parser from './pages/Parser';
 
 type AppState = 'loading' | 'setup' | 'login' | 'ready';
 
@@ -57,6 +60,9 @@ export default function App() {
           <Route path="collections" element={<Collections />} />
           <Route path="settings" element={<Navigate to="/settings/general" replace />} />
           <Route path="settings/:section" element={<Settings />} />
+          <Route path="media" element={<Media />} />
+          <Route path="files" element={<FileReview />} />
+          <Route path="parser" element={<Parser />} />
           <Route path="utilities" element={<Utilities />} />
           <Route path="log" element={<Log />} />
           <Route path="actions" element={<Actions />} />
