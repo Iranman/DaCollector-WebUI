@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw, ChevronRight, ChevronDown, EyeOff, Eye, Search, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  RefreshCw, ChevronRight, ChevronDown,
+  EyeOff, Eye, Search, CheckCircle2, XCircle, RotateCcw,
+} from 'lucide-react';
 import {
   fileReviewApi,
   MediaFileReviewItem,
@@ -15,12 +18,13 @@ interface FileState {
   candidates: MediaFileMatchCandidate[] | null;
   loadingCandidates: boolean;
   scanning: boolean;
+  refreshing: boolean;
   acting: boolean;
   error: string | null;
 }
 
 function defaultFileState(): FileState {
-  return { expanded: false, candidates: null, loadingCandidates: false, scanning: false, acting: false, error: null };
+  return { expanded: false, candidates: null, loadingCandidates: false, scanning: false, refreshing: false, acting: false, error: null };
 }
 
 export default function FileReview() {
@@ -29,6 +33,7 @@ export default function FileReview() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [includeIgnored, setIncludeIgnored] = useState(false);
+  const [scanOnline, setScanOnline] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [batchScanning, setBatchScanning] = useState(false);
@@ -105,16 +110,42 @@ export default function FileReview() {
     }
   }
 
+  async function handleRefreshParse(fileID: number) {
+    patchState(fileID, { refreshing: true, error: null });
+    try {
+      const updated = await fileReviewApi.refreshParse(fileID);
+      setFiles(prev => prev.map(f => f.FileID === fileID ? updated : f));
+      patchState(fileID, { candidates: null }); // force candidate reload on next expand
+    } catch (err) {
+      patchState(fileID, { error: err instanceof Error ? err.message : 'Refresh failed.' });
+    } finally {
+      patchState(fileID, { refreshing: false });
+    }
+  }
+
   async function handleScanMatches(fileID: number) {
     patchState(fileID, { scanning: true, error: null });
     try {
-      await fileReviewApi.scanMatches(fileID);
+      await fileReviewApi.scanMatches(fileID, scanOnline);
       const candidates = await fileReviewApi.getFileCandidates(fileID);
       patchState(fileID, { candidates, expanded: true });
     } catch (err) {
       patchState(fileID, { error: err instanceof Error ? err.message : 'Scan failed.' });
     } finally {
       patchState(fileID, { scanning: false });
+    }
+  }
+
+  async function handleClearMatch(fileID: number) {
+    patchState(fileID, { acting: true, error: null });
+    try {
+      const updated = await fileReviewApi.clearManualMatch(fileID);
+      setFiles(prev => prev.map(f => f.FileID === fileID ? updated : f));
+      patchState(fileID, { candidates: null });
+    } catch (err) {
+      patchState(fileID, { error: err instanceof Error ? err.message : 'Failed to clear match.' });
+    } finally {
+      patchState(fileID, { acting: false });
     }
   }
 
@@ -149,7 +180,7 @@ export default function FileReview() {
     setBatchScanning(true);
     setError(null);
     try {
-      await fileReviewApi.scanAllMatches(includeIgnored);
+      await fileReviewApi.scanAllMatches(includeIgnored, scanOnline);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Batch scan failed.');
@@ -167,7 +198,16 @@ export default function FileReview() {
           <h1 className="text-xl font-semibold text-white">File Review</h1>
           <p className="text-xs text-gray-500 mt-0.5">{total} unmatched file{total !== 1 ? 's' : ''}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-1.5 text-xs text-gray-400 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={scanOnline}
+              onChange={e => setScanOnline(e.target.checked)}
+              className="rounded border-gray-600 bg-gray-900 accent-blue-500"
+            />
+            Online search
+          </label>
           <button
             disabled={batchScanning}
             onClick={handleBatchScan}
@@ -220,7 +260,9 @@ export default function FileReview() {
                 onToggle={() => toggleExpand(file.FileID)}
                 onIgnore={() => handleIgnore(file.FileID)}
                 onUnignore={() => handleUnignore(file.FileID)}
+                onRefreshParse={() => handleRefreshParse(file.FileID)}
                 onScan={() => handleScanMatches(file.FileID)}
+                onClearMatch={() => handleClearMatch(file.FileID)}
                 onApprove={id => handleApprove(id, file.FileID)}
                 onReject={id => handleReject(id, file.FileID)}
               />
@@ -259,12 +301,14 @@ interface FileRowProps {
   onToggle: () => void;
   onIgnore: () => void;
   onUnignore: () => void;
+  onRefreshParse: () => void;
   onScan: () => void;
+  onClearMatch: () => void;
   onApprove: (id: number) => void;
   onReject: (id: number) => void;
 }
 
-function FileRow({ file, state, onToggle, onIgnore, onUnignore, onScan, onApprove, onReject }: FileRowProps) {
+function FileRow({ file, state, onToggle, onIgnore, onUnignore, onRefreshParse, onScan, onClearMatch, onApprove, onReject }: FileRowProps) {
   const rev = file.Review;
   const fileName = file.PrimaryPath.split(/[/\\]/).pop() ?? file.PrimaryPath;
   const sizeMB = (file.FileSize / 1_048_576).toFixed(0);
@@ -290,6 +334,13 @@ function FileRow({ file, state, onToggle, onIgnore, onUnignore, onScan, onApprov
         <div className="flex items-center gap-2 shrink-0">
           <span className="text-xs text-gray-600">{sizeMB} MB</span>
           <StatusBadge status={rev.Status} />
+
+          {rev.Status === 'ManualMatch' && (
+            <ActionBtn disabled={state.acting} onClick={onClearMatch} title="Clear match">
+              <RotateCcw size={13} />
+            </ActionBtn>
+          )}
+
           {rev.Status === 'Ignored' ? (
             <ActionBtn disabled={state.acting} onClick={onUnignore} title="Unignore">
               <Eye size={13} />
@@ -299,6 +350,7 @@ function FileRow({ file, state, onToggle, onIgnore, onUnignore, onScan, onApprov
               <EyeOff size={13} />
             </ActionBtn>
           )}
+
           <button
             disabled={state.scanning || state.acting}
             onClick={onScan}
@@ -330,8 +382,20 @@ function FileRow({ file, state, onToggle, onIgnore, onUnignore, onScan, onApprov
             )}
             {rev.ParsedQuality && <InfoCell label="Quality" value={rev.ParsedQuality} />}
             {rev.ParsedSource && <InfoCell label="Source" value={rev.ParsedSource} />}
+            {rev.ParsedEdition && <InfoCell label="Edition" value={rev.ParsedEdition} />}
             {rev.ParsedVideoCodec && <InfoCell label="Video" value={rev.ParsedVideoCodec} />}
-            {rev.ManualTitle && <InfoCell label="Matched" value={`${rev.ManualProvider}:${rev.ManualProviderID} — ${rev.ManualTitle}`} />}
+            {rev.ParsedAudioCodec && (
+              <InfoCell label="Audio" value={rev.ParsedAudioCodec + (rev.ParsedAudioChannels ? ` ${rev.ParsedAudioChannels}` : '')} />
+            )}
+            {rev.ParsedHdrFormats.length > 0 && (
+              <InfoCell label="HDR" value={rev.ParsedHdrFormats.join(', ')} />
+            )}
+            {rev.ParsedExternalIds.length > 0 && (
+              <InfoCell label="IDs" value={rev.ParsedExternalIds.map(id => `${id.Source}:${id.Id}`).join(', ')} />
+            )}
+            {rev.ManualTitle && (
+              <InfoCell label="Matched" value={`${rev.ManualProvider}:${rev.ManualProviderID} — ${rev.ManualTitle}`} />
+            )}
           </div>
 
           {rev.ParsedWarnings.length > 0 && (
@@ -341,6 +405,18 @@ function FileRow({ file, state, onToggle, onIgnore, onUnignore, onScan, onApprov
               ))}
             </div>
           )}
+
+          {/* Refresh parse */}
+          <div>
+            <button
+              disabled={state.refreshing}
+              onClick={onRefreshParse}
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors disabled:opacity-40"
+            >
+              <RefreshCw size={11} className={state.refreshing ? 'animate-spin' : ''} />
+              {state.refreshing ? 'Refreshing…' : 'Refresh parse'}
+            </button>
+          </div>
 
           {/* Candidates */}
           {state.loadingCandidates ? (
