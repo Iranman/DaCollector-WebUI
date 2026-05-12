@@ -12,7 +12,7 @@ Context:
 - DaCollector Relay is the planned Plex scanner/agent/adapter. WebUI may configure or monitor Relay through server APIs later, but Relay behavior belongs outside this repo.
 
 Status as of 2026-05-11:
-- P0-P7 are implemented and verified in the React WebUI.
+- P0-P8 are implemented and verified in the React WebUI.
 - `/settings` now redirects to `/settings/general`, while `/settings/:section` still drives the active settings section.
 - Collections now use the real `/api/v3/ManagedCollection` backend contract and include add, edit, preview, sync dry-run, and delete controls.
 - `npm run build` passes.

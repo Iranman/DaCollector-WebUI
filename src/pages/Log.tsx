@@ -1,8 +1,11 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Wifi, WifiOff } from 'lucide-react';
 import { loggingApi, LogEntry } from '../api/logging';
 import { ApiError } from '../api/client';
+import { buildConnection } from '../lib/signalr';
+
+const MAX_ENTRIES = 500;
 
 const LEVEL_STYLES: Record<string, string> = {
   Trace: 'text-gray-600',
@@ -30,6 +33,16 @@ function levelBadge(level: string) {
   return LEVEL_BADGE[level] ?? 'bg-gray-800 text-gray-400';
 }
 
+// SignalR uses Microsoft.Extensions.Logging level names; normalize to NLog names used in the REST API
+function normalizeLevel(level: string): string {
+  if (level === 'Information') return 'Info';
+  if (level === 'Warning') return 'Warn';
+  if (level === 'Critical') return 'Fatal';
+  return level;
+}
+
+type ConnState = 'connecting' | 'live' | 'reconnecting' | 'offline';
+
 export default function Log() {
   const navigate = useNavigate();
   const [entries, setEntries] = useState<LogEntry[]>([]);
@@ -37,27 +50,63 @@ export default function Log() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('');
   const [levelFilter, setLevelFilter] = useState('All');
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const [connState, setConnState] = useState<ConnState>('connecting');
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
-    try {
-      const result = await loggingApi.read(0, 500, true);
-      setEntries(result.Entries);
-      setError(null);
-    } catch (err) {
-      if (err instanceof ApiError && err.status === 401) {
-        navigate('/login');
-      } else {
-        setError(err instanceof Error ? err.message : 'Failed to load logs.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [navigate]);
-
+  // Load recent history from the REST log file, then wire up SignalR for live tail.
   useEffect(() => {
-    load();
-  }, [load]);
+    let stopped = false;
+
+    async function loadHistory() {
+      try {
+        const result = await loggingApi.read(0, MAX_ENTRIES, true);
+        if (!stopped) {
+          // REST returns newest-first; reverse to chronological order for appending live entries
+          setEntries(result.Entries.slice().reverse());
+          setError(null);
+        }
+      } catch (err) {
+        if (stopped) return;
+        if (err instanceof ApiError && err.status === 401) navigate('/login');
+        else setError(err instanceof Error ? err.message : 'Failed to load logs.');
+      } finally {
+        if (!stopped) setLoading(false);
+      }
+    }
+
+    loadHistory();
+
+    const conn = buildConnection('/signalr/logging');
+
+    conn.on('GetBacklog', (backlog: LogEntry[]) => {
+      // Backlog already loaded from REST; skip to avoid duplicates
+    });
+
+    conn.on('Log', (entry: LogEntry) => {
+      const normalized: LogEntry = { ...entry, Level: normalizeLevel(entry.Level) };
+      setEntries(prev => {
+        const next = [...prev, normalized];
+        return next.length > MAX_ENTRIES ? next.slice(next.length - MAX_ENTRIES) : next;
+      });
+      // Auto-scroll to bottom so the latest entry is visible
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+      });
+    });
+
+    conn.onreconnecting(() => setConnState('reconnecting'));
+    conn.onreconnected(() => setConnState('live'));
+    conn.onclose(() => { if (!stopped) setConnState('offline'); });
+
+    conn.start()
+      .then(() => { if (!stopped) setConnState('live'); })
+      .catch(() => { if (!stopped) setConnState('offline'); });
+
+    return () => {
+      stopped = true;
+      conn.stop();
+    };
+  }, [navigate]);
 
   const levels = ['All', 'Trace', 'Debug', 'Info', 'Warn', 'Error', 'Fatal'];
 
@@ -72,13 +121,28 @@ export default function Log() {
     <div className="mx-auto max-w-7xl px-6 py-8 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold text-white">Log</h1>
-        <button
-          onClick={load}
-          className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
-        >
-          <RefreshCw size={13} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {connState === 'live' && (
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+              <Wifi size={12} /> Live
+            </span>
+          )}
+          {connState === 'reconnecting' && (
+            <span className="flex items-center gap-1.5 text-xs text-yellow-400">
+              <RefreshCw size={12} className="animate-spin" /> Reconnecting
+            </span>
+          )}
+          {connState === 'offline' && (
+            <span className="flex items-center gap-1.5 text-xs text-gray-500">
+              <WifiOff size={12} /> Offline
+            </span>
+          )}
+          {connState === 'connecting' && (
+            <span className="flex items-center gap-1.5 text-xs text-gray-500">
+              <RefreshCw size={12} className="animate-spin" /> Connecting
+            </span>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -124,9 +188,9 @@ export default function Log() {
         ) : filtered.length === 0 ? (
           <div className="px-5 py-8 text-center text-sm text-gray-500">No log entries found.</div>
         ) : (
-          <div className="overflow-x-auto">
+          <div ref={scrollRef} className="max-h-[70vh] overflow-y-auto overflow-x-auto">
             <table className="w-full text-xs">
-              <thead>
+              <thead className="sticky top-0 bg-[#0d0d1a]">
                 <tr className="border-b border-gray-800/50">
                   <th className="px-4 py-2 text-left text-gray-500 font-normal whitespace-nowrap">Time</th>
                   <th className="px-3 py-2 text-left text-gray-500 font-normal">Level</th>
@@ -142,7 +206,6 @@ export default function Log() {
             </table>
           </div>
         )}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

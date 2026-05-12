@@ -10,6 +10,7 @@ export interface QueueItem {
 }
 
 export interface QueueStatus {
+  Running?: boolean;
   WaitingCount: number;
   BlockedCount: number;
   TotalCount: number;
