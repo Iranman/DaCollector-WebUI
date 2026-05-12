@@ -13,6 +13,7 @@ import Log from './pages/Log';
 import Actions from './pages/Actions';
 import Media from './pages/Media';
 import FileReview from './pages/FileReview';
+import ManagedFolders from './pages/ManagedFolders';
 import Parser from './pages/Parser';
 
 type AppState = 'loading' | 'setup' | 'login' | 'ready';
@@ -62,6 +63,7 @@ export default function App() {
           <Route path="settings/:section" element={<Settings />} />
           <Route path="media" element={<Media />} />
           <Route path="files" element={<FileReview />} />
+          <Route path="folders" element={<ManagedFolders />} />
           <Route path="parser" element={<Parser />} />
           <Route path="utilities" element={<Utilities />} />
           <Route path="log" element={<Log />} />

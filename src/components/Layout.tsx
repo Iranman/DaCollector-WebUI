@@ -12,6 +12,7 @@ import {
   Film,
   FolderSearch,
   ScanLine,
+  FolderOpen,
 } from 'lucide-react';
 import { clearApiKey } from '../api/client';
 
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { to: '/media', label: 'Library', Icon: Film },
   { to: '/files', label: 'Files', Icon: FolderSearch },
+  { to: '/folders', label: 'Folders', Icon: FolderOpen },
   { to: '/collections', label: 'Collections', Icon: Library },
   { to: '/parser', label: 'Parser', Icon: ScanLine },
   { to: '/utilities', label: 'Utilities', Icon: Wrench },
