@@ -373,18 +373,17 @@ function MetadataSitesSection({
       <SettingGroup title="TMDB Options">
         <ToggleRow label="Auto Link" checked={toBool(settings.TMDB?.AutoLink, true)} onChange={v => updateSetting(['TMDB', 'AutoLink'], v)} />
         <ToggleRow label="Auto Link Restricted" checked={toBool(settings.TMDB?.AutoLinkRestricted, true)} onChange={v => updateSetting(['TMDB', 'AutoLinkRestricted'], v)} />
-        <ToggleRow label="Include Restricted in Search" checked={toBool(settings.TMDB?.IncludeRestricted)} onChange={v => updateSetting(['TMDB', 'IncludeRestricted'], v)} />
       </SettingGroup>
       <SettingGroup title="TMDB Download Options">
-        <ToggleRow label="Download Crew And Cast" checked={toBool(settings.TMDB?.DownloadCrewAndCast, true)} onChange={v => updateSetting(['TMDB', 'DownloadCrewAndCast'], v)} />
-        <ToggleRow label="Download Movie Collections" checked={toBool(settings.TMDB?.DownloadMovieCollections, true)} onChange={v => updateSetting(['TMDB', 'DownloadMovieCollections'], v)} />
-        <ToggleRow label="Download Alternate Ordering" checked={toBool(settings.TMDB?.DownloadAlternateOrdering, true)} onChange={v => updateSetting(['TMDB', 'DownloadAlternateOrdering'], v)} />
-        <DownloadLimitRow label="Download Backdrops" togglePath="DownloadBackdrops" maxPath="MaxBackdrops" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Posters" togglePath="DownloadPosters" maxPath="MaxPosters" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Logos" togglePath="DownloadLogos" maxPath="MaxLogos" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Episode Thumbnails" togglePath="DownloadEpisodeThumbnails" maxPath="MaxEpisodeThumbnails" defaultMax={1} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Staff Images" togglePath="DownloadStaffImages" maxPath="MaxStaffImages" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <ToggleRow label="Download Studio Images" checked={toBool(settings.TMDB?.DownloadStudioImages, true)} onChange={v => updateSetting(['TMDB', 'DownloadStudioImages'], v)} />
+        <ToggleRow label="Download Crew And Cast" checked={toBool(settings.TMDB?.AutoDownloadCrewAndCast)} onChange={v => updateSetting(['TMDB', 'AutoDownloadCrewAndCast'], v)} />
+        <ToggleRow label="Download Movie Collections" checked={toBool(settings.TMDB?.AutoDownloadCollections)} onChange={v => updateSetting(['TMDB', 'AutoDownloadCollections'], v)} />
+        <ToggleRow label="Download Alternate Ordering" checked={toBool(settings.TMDB?.AutoDownloadAlternateOrdering)} onChange={v => updateSetting(['TMDB', 'AutoDownloadAlternateOrdering'], v)} />
+        <DownloadLimitRow label="Download Backdrops" togglePath="AutoDownloadBackdrops" maxPath="MaxAutoBackdrops" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Download Posters" togglePath="AutoDownloadPosters" maxPath="MaxAutoPosters" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Download Logos" togglePath="AutoDownloadLogos" maxPath="MaxAutoLogos" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Download Episode Thumbnails" togglePath="AutoDownloadThumbnails" maxPath="MaxAutoThumbnails" defaultMax={1} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Download Staff Images" togglePath="AutoDownloadStaffImages" maxPath="MaxAutoStaffImages" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <ToggleRow label="Download Studio Images" checked={toBool(settings.TMDB?.AutoDownloadStudioImages, true)} onChange={v => updateSetting(['TMDB', 'AutoDownloadStudioImages'], v)} />
       </SettingGroup>
     </div>
   );
