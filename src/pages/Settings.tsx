@@ -16,7 +16,6 @@ import Toggle from '../components/ui/Toggle';
 type SectionId =
   | 'general'
   | 'import'
-  | 'anidb'
   | 'tvdb'
   | 'metadata-sites'
   | 'collection'
@@ -29,7 +28,6 @@ type SettingValue = string | number | boolean | string[] | undefined;
 const sections: Array<{ id: SectionId; label: string }> = [
   { id: 'general', label: 'General' },
   { id: 'import', label: 'Import' },
-  { id: 'anidb', label: 'AniDB' },
   { id: 'tvdb', label: 'TVDB' },
   { id: 'metadata-sites', label: 'Metadata Sites' },
   { id: 'collection', label: 'Collection' },
@@ -221,9 +219,6 @@ export default function Settings() {
               {activeSection === 'import' && (
                 <ImportSection settings={settings} updateSetting={updateSetting} />
               )}
-              {activeSection === 'anidb' && (
-                <AniDBSection settings={settings} updateSetting={updateSetting} />
-              )}
               {activeSection === 'tvdb' && (
                 <TVDBSection settings={settings} updateSetting={updateSetting} />
               )}
@@ -303,104 +298,6 @@ function ImportSection({
         <ToggleRow label="File Quality Check" checked={toBool(settings.FileQualityFilterEnabled)} onChange={v => updateSetting(['FileQualityFilterEnabled'], v)} />
         <SettingsRow label="Max Auto-Scan Attempts per File">
           <TextInput type="number" min={0} value={settings.Import?.MaxAutoScanAttemptsPerFile ?? 15} onChange={e => updateSetting(['Import', 'MaxAutoScanAttemptsPerFile'], Number(e.target.value))} />
-        </SettingsRow>
-      </SettingGroup>
-    </div>
-  );
-}
-
-const UPDATE_FREQUENCIES = [
-  { value: 'Never', label: 'Never' },
-  { value: 'HoursSix', label: 'Every 6 hours' },
-  { value: 'HoursTwelve', label: 'Every 12 hours' },
-  { value: 'Daily', label: 'Every 24 hours' },
-  { value: 'WeekOne', label: 'Once a week' },
-  { value: 'MonthOne', label: 'Once a month' },
-];
-
-function AniDBSection({
-  settings,
-  updateSetting,
-}: {
-  settings: ServerSettings;
-  updateSetting: (path: string[], value: SettingValue) => void;
-}) {
-  const a = (key: string) => ['AniDb', key];
-  return (
-    <div className="space-y-7">
-      <SectionHeader title="AniDB" description="Configure your AniDB credentials and control what metadata and update schedules DaCollector uses." />
-
-      <SettingGroup title="Login">
-        <SettingsRow label="Username">
-          <TextInput value={settings.AniDb?.Username ?? ''} onChange={e => updateSetting(a('Username'), e.target.value)} placeholder="AniDB username" />
-        </SettingsRow>
-        <SettingsRow label="Password">
-          <TextInput type="password" value={settings.AniDb?.Password ?? ''} onChange={e => updateSetting(a('Password'), e.target.value)} placeholder="AniDB password" />
-        </SettingsRow>
-      </SettingGroup>
-
-      <SettingGroup title="Download">
-        <ToggleRow label="Download Character Images" checked={toBool(settings.AniDb?.DownloadCharacters, true)} onChange={v => updateSetting(a('DownloadCharacters'), v)} />
-        <ToggleRow label="Download Creator Images & Data" checked={toBool(settings.AniDb?.DownloadCreators, true)} onChange={v => updateSetting(a('DownloadCreators'), v)} />
-        <ToggleRow label="Always Download Related Anime" checked={toBool(settings.AniDb?.DownloadRelatedAnime)} onChange={v => updateSetting(a('DownloadRelatedAnime'), v)} />
-        <SettingsRow label="Max Relation Depth">
-          <TextInput type="number" min={0} max={5} value={settings.AniDb?.MaxRelationDepth ?? 1} onChange={e => updateSetting(a('MaxRelationDepth'), Number(e.target.value))} />
-        </SettingsRow>
-        <ToggleRow label="Automatically Import Series" checked={toBool(settings.AniDb?.AutomaticallyImportSeries)} onChange={v => updateSetting(a('AutomaticallyImportSeries'), v)} />
-      </SettingGroup>
-
-      <SettingGroup title="Update Frequencies">
-        <SettingsRow label="Calendar">
-          <Select value={settings.AniDb?.Calendar_UpdateFrequency ?? 'Never'} onChange={e => updateSetting(a('Calendar_UpdateFrequency'), e.target.value)}>
-            {UPDATE_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="Anime Updates">
-          <Select value={settings.AniDb?.Anime_UpdateFrequency ?? 'Never'} onChange={e => updateSetting(a('Anime_UpdateFrequency'), e.target.value)}>
-            {UPDATE_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="Files with Missing Info">
-          <Select value={settings.AniDb?.File_UpdateFrequency ?? 'Daily'} onChange={e => updateSetting(a('File_UpdateFrequency'), e.target.value)}>
-            {UPDATE_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="MyList">
-          <Select value={settings.AniDb?.MyList_UpdateFrequency ?? 'Never'} onChange={e => updateSetting(a('MyList_UpdateFrequency'), e.target.value)}>
-            {UPDATE_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="Notifications & Messages">
-          <Select value={settings.AniDb?.Notification_UpdateFrequency ?? 'Never'} onChange={e => updateSetting(a('Notification_UpdateFrequency'), e.target.value)}>
-            {UPDATE_FREQUENCIES.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </Select>
-        </SettingsRow>
-      </SettingGroup>
-
-      <SettingGroup title="MyList">
-        <ToggleRow label="Add Files to MyList" checked={toBool(settings.AniDb?.MyList_AddFiles, true)} onChange={v => updateSetting(a('MyList_AddFiles'), v)} />
-        <ToggleRow label="Read Watched State" checked={toBool(settings.AniDb?.MyList_ReadWatched, true)} onChange={v => updateSetting(a('MyList_ReadWatched'), v)} />
-        <ToggleRow label="Read Unwatched State" checked={toBool(settings.AniDb?.MyList_ReadUnwatched, true)} onChange={v => updateSetting(a('MyList_ReadUnwatched'), v)} />
-        <ToggleRow label="Set Watched" checked={toBool(settings.AniDb?.MyList_SetWatched, true)} onChange={v => updateSetting(a('MyList_SetWatched'), v)} />
-        <ToggleRow label="Set Unwatched" checked={toBool(settings.AniDb?.MyList_SetUnwatched, true)} onChange={v => updateSetting(a('MyList_SetUnwatched'), v)} />
-        <SettingsRow label="Storage State">
-          <Select value={settings.AniDb?.MyList_StorageState ?? 'HDD'} onChange={e => updateSetting(a('MyList_StorageState'), e.target.value)}>
-            <option value="Unknown">Unknown</option>
-            <option value="HDD">HDD</option>
-            <option value="Disk">Disk</option>
-            <option value="Deleted">Deleted</option>
-            <option value="Remote">Remote</option>
-          </Select>
-        </SettingsRow>
-        <SettingsRow label="Delete Type">
-          <Select value={settings.AniDb?.MyList_DeleteType ?? 'MarkUnknown'} onChange={e => updateSetting(a('MyList_DeleteType'), e.target.value)}>
-            <option value="Delete">Delete</option>
-            <option value="DeleteLocalOnly">Delete Local Only</option>
-            <option value="MarkDeleted">Mark Deleted</option>
-            <option value="MarkExternalStorage">Mark External Storage</option>
-            <option value="MarkUnknown">Mark Unknown</option>
-            <option value="MarkDisk">Mark Disk</option>
-          </Select>
         </SettingsRow>
       </SettingGroup>
     </div>

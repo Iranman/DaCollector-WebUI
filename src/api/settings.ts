@@ -5,27 +5,6 @@ export interface ServerSettings {
   AutoGroupSeriesRelationExclusions?: string[];
   AutoGroupSeriesUseScoreAlgorithm?: boolean;
   FileQualityFilterEnabled?: boolean;
-  AniDb?: {
-    Username?: string;
-    Password?: string;
-    DownloadCharacters?: boolean;
-    DownloadCreators?: boolean;
-    DownloadRelatedAnime?: boolean;
-    MaxRelationDepth?: number;
-    AutomaticallyImportSeries?: boolean;
-    MyList_AddFiles?: boolean;
-    MyList_ReadWatched?: boolean;
-    MyList_ReadUnwatched?: boolean;
-    MyList_SetWatched?: boolean;
-    MyList_SetUnwatched?: boolean;
-    MyList_StorageState?: string;
-    MyList_DeleteType?: string;
-    Calendar_UpdateFrequency?: string;
-    Anime_UpdateFrequency?: string;
-    File_UpdateFrequency?: string;
-    MyList_UpdateFrequency?: string;
-    Notification_UpdateFrequency?: string;
-  };
   TMDB?: {
     UserApiKey?: string;
     AutoLink?: boolean;
