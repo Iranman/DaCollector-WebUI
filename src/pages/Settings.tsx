@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Check, KeyRound, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { ApiError } from '../api/client';
 import { settingsApi, ServerSettings } from '../api/settings';
 import { ApiToken, tokensApi } from '../api/tokens';
-import { User, usersApi } from '../api/users';
+import { User, CreateOrUpdateUserBody, CreateUserBody, usersApi } from '../api/users';
 import Button from '../components/ui/Button';
 import SectionHeader from '../components/ui/SectionHeader';
 import Select from '../components/ui/Select';
@@ -63,11 +64,6 @@ export default function Settings() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const [users, setUsers] = useState<User[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [usersError, setUsersError] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-
   const [tokens, setTokens] = useState<ApiToken[]>([]);
   const [tokensLoading, setTokensLoading] = useState(false);
   const [tokensError, setTokensError] = useState<string | null>(null);
@@ -91,27 +87,10 @@ export default function Settings() {
   }, [navigate]);
 
   useEffect(() => {
-    if (activeSection === 'user-management') {
-      loadUsers();
-    }
     if (activeSection === 'api-keys') {
       loadTokens();
     }
   }, [activeSection]);
-
-  async function loadUsers() {
-    setUsersLoading(true);
-    setUsersError(null);
-    try {
-      const data = await usersApi.list();
-      setUsers(data);
-      setSelectedUserId(current => current ?? getUserId(data[0]) ?? null);
-    } catch (err) {
-      setUsersError(err instanceof Error ? err.message : 'Failed to load users.');
-    } finally {
-      setUsersLoading(false);
-    }
-  }
 
   async function loadTokens() {
     setTokensLoading(true);
@@ -196,8 +175,6 @@ export default function Settings() {
     updateSetting(['AutoGroupSeriesRelationExclusions'], next);
   }
 
-  const selectedUser = users.find(user => getUserId(user) === selectedUserId);
-
   if (loading) {
     return (
       <div className="flex justify-center py-24">
@@ -254,14 +231,7 @@ export default function Settings() {
                 <IntegrationsSection settings={settings} updateSetting={updateSetting} />
               )}
               {activeSection === 'user-management' && (
-                <UserManagementSection
-                  users={users}
-                  loading={usersLoading}
-                  error={usersError}
-                  selectedUser={selectedUser}
-                  selectedUserId={selectedUserId}
-                  setSelectedUserId={setSelectedUserId}
-                />
+                <UserManagementSection />
               )}
               {activeSection === 'api-keys' && (
                 <ApiKeysSection
@@ -477,75 +447,345 @@ function IntegrationsSection({
   );
 }
 
-function UserManagementSection({
-  users,
-  loading,
-  error,
-  selectedUser,
-  selectedUserId,
-  setSelectedUserId,
-}: {
-  users: User[];
-  loading: boolean;
-  error: string | null;
-  selectedUser?: User;
-  selectedUserId: number | null;
-  setSelectedUserId: (id: number | null) => void;
-}) {
+type EditDraft = { Username: string; IsAdmin: boolean; IsTrkt: boolean; PlexUsernames: string };
+type AddDraft = { Username: string; Password: string; IsAdmin: boolean };
+
+function UserManagementSection() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [addDraft, setAddDraft] = useState<AddDraft>({ Username: '', Password: '', IsAdmin: false });
+  const [addError, setAddError] = useState<string | null>(null);
+  const [addSaving, setAddSaving] = useState(false);
+
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft>({ Username: '', IsAdmin: false, IsTrkt: false, PlexUsernames: '' });
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+
+  const [pwUserId, setPwUserId] = useState<number | null>(null);
+  const [newPw, setNewPw] = useState('');
+  const [revokeKeys, setRevokeKeys] = useState(true);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSaving, setPwSaving] = useState(false);
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      setUsers(await usersApi.list());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load users.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openEdit(user: User) {
+    setEditingId(user.ID);
+    setEditDraft({
+      Username: user.Username,
+      IsAdmin: user.IsAdmin,
+      IsTrkt: user.CommunitySites.includes('Trakt'),
+      PlexUsernames: user.PlexUsernames ?? '',
+    });
+    setEditError(null);
+    setPwUserId(null);
+    setPwError(null);
+  }
+
+  function closeEdit() {
+    setEditingId(null);
+    setEditError(null);
+    setPwUserId(null);
+    setPwError(null);
+  }
+
+  async function handleSaveEdit() {
+    if (!editDraft.Username.trim()) { setEditError('Username is required.'); return; }
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const body: CreateOrUpdateUserBody = {
+        Username: editDraft.Username.trim(),
+        IsAdmin: editDraft.IsAdmin,
+        CommunitySites: editDraft.IsTrkt ? ['Trakt'] : [],
+        PlexUsernames: editDraft.PlexUsernames.trim() || undefined,
+      };
+      const updated = await usersApi.update(editingId!, body);
+      setUsers(prev => prev.map(u => u.ID === editingId ? updated : u));
+      closeEdit();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Save failed.');
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  function openAdd() {
+    setShowAdd(true);
+    setAddDraft({ Username: '', Password: '', IsAdmin: false });
+    setAddError(null);
+    closeEdit();
+  }
+
+  async function handleCreate() {
+    if (!addDraft.Username.trim()) { setAddError('Username is required.'); return; }
+    if (!addDraft.Password) { setAddError('Password is required.'); return; }
+    setAddSaving(true);
+    setAddError(null);
+    try {
+      const body: CreateUserBody = {
+        Username: addDraft.Username.trim(),
+        Password: addDraft.Password,
+        IsAdmin: addDraft.IsAdmin,
+      };
+      const created = await usersApi.create(body);
+      setUsers(prev => [...prev, created]);
+      setShowAdd(false);
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Create failed.');
+    } finally {
+      setAddSaving(false);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    try {
+      await usersApi.delete(id);
+      setUsers(prev => prev.filter(u => u.ID !== id));
+      setConfirmDeleteId(null);
+      if (editingId === id) closeEdit();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed.');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  function openPasswordChange(userId: number) {
+    const user = users.find(u => u.ID === userId);
+    if (user && editingId !== userId) openEdit(user);
+    setPwUserId(userId);
+    setNewPw('');
+    setRevokeKeys(true);
+    setPwError(null);
+  }
+
+  async function handleChangePassword() {
+    if (!newPw) { setPwError('Password cannot be empty.'); return; }
+    setPwSaving(true);
+    setPwError(null);
+    try {
+      await usersApi.changePassword(pwUserId!, newPw, revokeKeys);
+      setPwUserId(null);
+      setNewPw('');
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : 'Password change failed.');
+    } finally {
+      setPwSaving(false);
+    }
+  }
+
   return (
-    <div className="space-y-7">
-      <SectionHeader title="User Management" description="Configure DaCollector user accounts by changing usernames, passwords, avatars, and integration mappings." />
+    <div className="space-y-6">
+      <SectionHeader title="User Management" description="Manage DaCollector user accounts — usernames, permissions, Trakt integration, and passwords." />
       {error && <Alert tone="error">{error}</Alert>}
-      <SettingGroup title="Current Users">
-        {loading ? (
-          <InlineSpinner />
-        ) : users.length === 0 ? (
-          <p className="py-2 text-sm text-gray-500">No users returned by the API.</p>
-        ) : (
-          users.map(user => {
-            const id = getUserId(user);
-            return (
-              <button
-                key={id ?? user.Username ?? 'unknown'}
-                type="button"
-                onClick={() => setSelectedUserId(id ?? null)}
-                className={`flex w-full items-center justify-between py-2 text-left text-sm transition-colors ${
-                  selectedUserId === id ? 'text-white' : 'text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                <span>{user.DisplayName ?? user.Username ?? `User ${id ?? ''}`}</span>
-                <span className="flex gap-3 text-lg">
-                  <span className="text-blue-500">◌</span>
-                  <span className="text-red-500">⊖</span>
+
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-gray-200">Users</h2>
+        <Button size="sm" onClick={openAdd} disabled={showAdd}>
+          <Plus size={13} className="mr-1" />
+          Add User
+        </Button>
+      </div>
+
+      {showAdd && (
+        <div className="app-card rounded-md p-5 space-y-4">
+          <h3 className="text-sm font-semibold text-gray-200">New User</h3>
+          {addError && <Alert tone="error">{addError}</Alert>}
+          <div className="space-y-1">
+            <SettingsRow label="Username">
+              <TextInput
+                value={addDraft.Username}
+                onChange={e => setAddDraft({ ...addDraft, Username: e.target.value })}
+                placeholder="username"
+              />
+            </SettingsRow>
+            <SettingsRow label="Password">
+              <TextInput
+                type="password"
+                value={addDraft.Password}
+                onChange={e => setAddDraft({ ...addDraft, Password: e.target.value })}
+                placeholder="••••••••"
+              />
+            </SettingsRow>
+            <SettingsRow label="Administrator">
+              <div className="flex justify-end">
+                <Toggle checked={addDraft.IsAdmin} onChange={v => setAddDraft({ ...addDraft, IsAdmin: v })} />
+              </div>
+            </SettingsRow>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setShowAdd(false)} disabled={addSaving}>Cancel</Button>
+            <Button onClick={handleCreate} disabled={addSaving}>{addSaving ? 'Creating…' : 'Create'}</Button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <InlineSpinner />
+      ) : users.length === 0 ? (
+        <p className="py-2 text-sm text-gray-500">No users found.</p>
+      ) : (
+        <div className="app-card rounded-md divide-y divide-gray-800/50">
+          {users.map(user => (
+            <div key={user.ID}>
+              <div className="flex items-center gap-3 px-5 py-3">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-500/20 text-sm font-semibold text-blue-400">
+                  {user.Username.charAt(0).toUpperCase()}
                 </span>
-              </button>
-            );
-          })
-        )}
-      </SettingGroup>
-      <SettingGroup title="User Options">
-        <SettingsRow label="Pick Avatar">
-          <div className="flex justify-end">
-            <Button variant="secondary" size="sm">Pick Avatar</Button>
-          </div>
-        </SettingsRow>
-        <ReadOnlyUserRow label="Display Name" value={selectedUser?.DisplayName ?? selectedUser?.Username ?? ''} />
-        <ReadOnlyToggleRow label="Administrator" value={selectedUser?.IsAdmin} />
-        <ReadOnlyToggleRow label="Trakt User" value={selectedUser?.IsTraktUser} />
-        <ReadOnlyUserRow label="Plex Users" value={selectedUser?.PlexUsers ?? ''} />
-      </SettingGroup>
-      <SettingGroup title="Password">
-        <SettingsRow label="Password">
-          <div className="flex justify-end">
-            <Button size="sm" variant="secondary">Change</Button>
-          </div>
-        </SettingsRow>
-        <SettingsRow label="New Password">
-          <TextInput type="password" value="" readOnly />
-        </SettingsRow>
-        <ReadOnlyToggleRow label="Logout all sessions" value={false} />
-      </SettingGroup>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-gray-100">{user.Username}</span>
+                    {user.IsAdmin && <UserBadge color="blue">Admin</UserBadge>}
+                    {user.CommunitySites.includes('Trakt') && <UserBadge color="gray">Trakt</UserBadge>}
+                  </div>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openPasswordChange(user.ID)}
+                    title="Change password"
+                    className="rounded p-1.5 text-gray-400 hover:text-blue-400 transition-colors"
+                  >
+                    <KeyRound size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => editingId === user.ID ? closeEdit() : openEdit(user)}
+                    title="Edit user"
+                    className="rounded p-1.5 text-gray-400 hover:text-blue-400 transition-colors"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  {confirmDeleteId === user.ID ? (
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        disabled={deletingId === user.ID}
+                        onClick={() => handleDelete(user.ID)}
+                        title="Confirm delete"
+                        className="rounded p-1.5 text-red-400 hover:text-red-300 transition-colors disabled:opacity-40"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(null)}
+                        title="Cancel"
+                        className="rounded p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(user.ID)}
+                      title="Delete user"
+                      className="rounded p-1.5 text-gray-400 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {editingId === user.ID && (
+                <div className="border-t border-gray-700/50 bg-gray-900/30 px-5 py-5 space-y-4">
+                  {editError && <Alert tone="error">{editError}</Alert>}
+                  <div className="space-y-1">
+                    <SettingsRow label="Username">
+                      <TextInput
+                        value={editDraft.Username}
+                        onChange={e => setEditDraft({ ...editDraft, Username: e.target.value })}
+                      />
+                    </SettingsRow>
+                    <SettingsRow label="Administrator">
+                      <div className="flex justify-end">
+                        <Toggle checked={editDraft.IsAdmin} onChange={v => setEditDraft({ ...editDraft, IsAdmin: v })} />
+                      </div>
+                    </SettingsRow>
+                    <SettingsRow label="Trakt User">
+                      <div className="flex justify-end">
+                        <Toggle checked={editDraft.IsTrkt} onChange={v => setEditDraft({ ...editDraft, IsTrkt: v })} />
+                      </div>
+                    </SettingsRow>
+                    <SettingsRow label="Plex Usernames">
+                      <TextInput
+                        value={editDraft.PlexUsernames}
+                        onChange={e => setEditDraft({ ...editDraft, PlexUsernames: e.target.value })}
+                        placeholder="comma-separated"
+                      />
+                    </SettingsRow>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button variant="secondary" onClick={closeEdit} disabled={editSaving}>Cancel</Button>
+                    <Button onClick={handleSaveEdit} disabled={editSaving}>{editSaving ? 'Saving…' : 'Save'}</Button>
+                  </div>
+
+                  {pwUserId === user.ID && (
+                    <div className="border-t border-gray-700/50 pt-4 space-y-4">
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Change Password</h3>
+                      {pwError && <Alert tone="error">{pwError}</Alert>}
+                      <div className="space-y-1">
+                        <SettingsRow label="New Password">
+                          <TextInput
+                            type="password"
+                            value={newPw}
+                            onChange={e => setNewPw(e.target.value)}
+                            placeholder="••••••••"
+                          />
+                        </SettingsRow>
+                        <SettingsRow label="Revoke API Keys">
+                          <div className="flex justify-end">
+                            <Toggle checked={revokeKeys} onChange={setRevokeKeys} />
+                          </div>
+                        </SettingsRow>
+                      </div>
+                      <div className="flex justify-end gap-3">
+                        <Button variant="secondary" onClick={() => { setPwUserId(null); setPwError(null); }} disabled={pwSaving}>Cancel</Button>
+                        <Button onClick={handleChangePassword} disabled={pwSaving}>{pwSaving ? 'Changing…' : 'Change Password'}</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+function UserBadge({ color, children }: { color: 'blue' | 'gray'; children: React.ReactNode }) {
+  const cls = color === 'blue'
+    ? 'bg-blue-600/20 text-blue-400'
+    : 'bg-gray-700/50 text-gray-400';
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
+      {children}
+    </span>
   );
 }
 
@@ -635,24 +875,6 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
-function ReadOnlyUserRow({ label, value }: { label: string; value: string }) {
-  return (
-    <SettingsRow label={label}>
-      <TextInput value={value} readOnly />
-    </SettingsRow>
-  );
-}
-
-function ReadOnlyToggleRow({ label, value }: { label: string; value?: boolean | number }) {
-  return (
-    <SettingsRow label={label}>
-      <div className="flex justify-end">
-        <Toggle checked={toBool(value)} disabled onChange={() => undefined} />
-      </div>
-    </SettingsRow>
-  );
-}
-
 function SettingGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
@@ -679,10 +901,6 @@ function InlineSpinner() {
 
 function normalizeSection(value?: string): SectionId {
   return sections.some(section => section.id === value) ? value as SectionId : 'general';
-}
-
-function getUserId(user?: User): number | undefined {
-  return user?.ID ?? user?.JMMUserID;
 }
 
 function toBool(value: unknown, fallback = false): boolean {
