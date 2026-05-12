@@ -5,6 +5,7 @@ import { ApiError } from '../api/client';
 import { settingsApi, ServerSettings } from '../api/settings';
 import { ApiToken, tokensApi } from '../api/tokens';
 import { User, CreateOrUpdateUserBody, CreateUserBody, usersApi } from '../api/users';
+import { plexTargetApi, PlexLibrarySection, PlexServerIdentity } from '../api/plexTarget';
 import Button from '../components/ui/Button';
 import SectionHeader from '../components/ui/SectionHeader';
 import Select from '../components/ui/Select';
@@ -409,19 +410,78 @@ function IntegrationsSection({
   settings: ServerSettings;
   updateSetting: (path: string[], value: SettingValue) => void;
 }) {
+  const [unlinking, setUnlinking] = useState(false);
+  const [unlinkError, setUnlinkError] = useState<string | null>(null);
+
+  const [plexTesting, setPlexTesting] = useState(false);
+  const [plexIdentity, setPlexIdentity] = useState<PlexServerIdentity | null>(null);
+  const [plexError, setPlexError] = useState<string | null>(null);
+  const [libraries, setLibraries] = useState<PlexLibrarySection[]>([]);
+
+  useEffect(() => {
+    if (settings.Plex?.TargetBaseUrl && settings.Plex?.TargetToken) {
+      plexTargetApi.getLibraries()
+        .then(setLibraries)
+        .catch(() => undefined);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleTraktUnlink() {
+    setUnlinking(true);
+    setUnlinkError(null);
+    try {
+      await settingsApi.update({ TraktTv: { AuthToken: '', RefreshToken: '', TokenExpirationDate: '' } });
+      updateSetting(['TraktTv', 'TokenExpirationDate'], '');
+    } catch (err) {
+      setUnlinkError(err instanceof Error ? err.message : 'Unlink failed.');
+    } finally {
+      setUnlinking(false);
+    }
+  }
+
+  async function handlePlexTest() {
+    setPlexTesting(true);
+    setPlexError(null);
+    setPlexIdentity(null);
+    try {
+      const identity = await plexTargetApi.getIdentity();
+      setPlexIdentity(identity);
+      if (identity.Reachable) {
+        const libs = await plexTargetApi.getLibraries();
+        setLibraries(libs);
+      }
+    } catch (err) {
+      setPlexError(err instanceof Error ? err.message : 'Connection test failed.');
+    } finally {
+      setPlexTesting(false);
+    }
+  }
+
+  const traktLinked = Boolean(settings.TraktTv?.TokenExpirationDate);
+
   return (
     <div className="space-y-7">
       <SectionHeader title="Integrations" description="Customize integrations that DaCollector uses to scrobble media and connect to Plex." />
-      <SettingGroup title="Trakt Options">
-        <SettingsRow label="Linked Account">
-          <div className="flex justify-end">
-            <Button variant="destructive" size="sm">Unlink</Button>
+
+      <SettingGroup title="Trakt">
+        {unlinkError && <Alert tone="error">{unlinkError}</Alert>}
+        <SettingsRow label="Status">
+          <div className="flex items-center justify-end gap-3">
+            {traktLinked ? (
+              <>
+                <span className="text-xs text-emerald-400">
+                  Linked · expires {settings.TraktTv?.TokenExpirationDate}
+                </span>
+                <Button variant="destructive" size="sm" disabled={unlinking} onClick={handleTraktUnlink}>
+                  {unlinking ? 'Unlinking…' : 'Unlink'}
+                </Button>
+              </>
+            ) : (
+              <span className="text-xs text-gray-500">Not linked</span>
+            )}
           </div>
         </SettingsRow>
         <ToggleRow label="Enabled" checked={toBool(settings.TraktTv?.Enabled)} onChange={v => updateSetting(['TraktTv', 'Enabled'], v)} />
-        <SettingsRow label="Token valid until">
-          <div className="text-right text-sm text-gray-400">{settings.TraktTv?.TokenExpirationDate ?? 'Not linked'}</div>
-        </SettingsRow>
         <SettingsRow label="Sync Frequency">
           <Select value={settings.TraktTv?.SyncFrequency ?? 'Daily'} onChange={e => updateSetting(['TraktTv', 'SyncFrequency'], e.target.value)}>
             <option value="SixHours">Every 6 Hours</option>
@@ -431,15 +491,49 @@ function IntegrationsSection({
           </Select>
         </SettingsRow>
       </SettingGroup>
-      <SettingGroup title="Plex Options">
-        <SettingsRow label="Authenticate">
-          <div className="flex justify-end">
-            <Button size="sm">Authenticate</Button>
+
+      <SettingGroup title="Plex Target">
+        {plexError && <Alert tone="error">{plexError}</Alert>}
+        <SettingsRow label="Server URL">
+          <TextInput
+            value={settings.Plex?.TargetBaseUrl ?? ''}
+            onChange={e => updateSetting(['Plex', 'TargetBaseUrl'], e.target.value)}
+            placeholder="http://127.0.0.1:32400"
+          />
+        </SettingsRow>
+        <SettingsRow label="Token">
+          <TextInput
+            type="password"
+            value={settings.Plex?.TargetToken ?? ''}
+            onChange={e => updateSetting(['Plex', 'TargetToken'], e.target.value)}
+            placeholder="Plex token"
+          />
+        </SettingsRow>
+        <SettingsRow label="Connection">
+          <div className="flex items-center justify-end gap-3">
+            {plexIdentity && (
+              <span className={`text-xs ${plexIdentity.Reachable ? 'text-emerald-400' : 'text-red-400'}`}>
+                {plexIdentity.Reachable
+                  ? `Connected${plexIdentity.Version ? ` · v${plexIdentity.Version}` : ''}`
+                  : plexIdentity.Status}
+              </span>
+            )}
+            <Button size="sm" variant="secondary" disabled={plexTesting} onClick={handlePlexTest}>
+              {plexTesting ? 'Testing…' : 'Test'}
+            </Button>
           </div>
         </SettingsRow>
-        <SettingsRow label="Server">
-          <Select defaultValue="">
-            <option value="">--Select Server--</option>
+        <SettingsRow label="Library Section">
+          <Select
+            value={settings.Plex?.TargetSectionKey ?? ''}
+            onChange={e => updateSetting(['Plex', 'TargetSectionKey'], e.target.value)}
+          >
+            <option value="">— Select Section —</option>
+            {libraries.map(lib => (
+              <option key={lib.Key} value={lib.Key}>
+                {lib.Title} ({lib.Type})
+              </option>
+            ))}
           </Select>
         </SettingsRow>
       </SettingGroup>

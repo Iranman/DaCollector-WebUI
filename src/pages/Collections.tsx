@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Check, X } from 'lucide-react';
 import {
   CollectionDefinition,
   CollectionPreview,
@@ -42,6 +43,8 @@ export default function Collections() {
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [preview, setPreview] = useState<CollectionPreview | null>(null);
   const [draft, setDraft] = useState<CollectionDraft | null>(null);
   const [saving, setSaving] = useState(false);
@@ -89,15 +92,18 @@ export default function Collections() {
     }
   }
 
-  async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete collection "${name}"?`)) return;
+  async function handleDelete(id: string) {
+    setDeleting(id);
     setError(null);
     try {
       await collectionsApi.delete(id);
       setCollections(prev => prev.filter(c => c.ID !== id));
       setPreview(current => current?.Collection.ID === id ? null : current);
+      setConfirmDeleteId(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Delete failed.');
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -241,13 +247,35 @@ export default function Collections() {
                 >
                   {syncing === c.ID ? 'Running...' : 'Sync Dry Run'}
                 </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => handleDelete(c.ID, c.Name)}
-                >
-                  Delete
-                </Button>
+                {confirmDeleteId === c.ID ? (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={deleting === c.ID}
+                      onClick={() => handleDelete(c.ID)}
+                    >
+                      <Check size={13} className="mr-1" />
+                      {deleting === c.ID ? 'Deleting…' : 'Confirm'}
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteId(null)}
+                      className="rounded p-1.5 text-gray-500 hover:text-gray-300 transition-colors"
+                      title="Cancel"
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setConfirmDeleteId(c.ID)}
+                  >
+                    Delete
+                  </Button>
+                )}
               </div>
             </div>
           ))}

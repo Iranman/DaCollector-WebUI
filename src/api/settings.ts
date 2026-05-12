@@ -40,10 +40,14 @@ export interface ServerSettings {
     EpisodeTitleLanguageOrder?: string[];
   };
   Plex?: {
-    Token?: string;
+    TargetBaseUrl?: string;
+    TargetSectionKey?: string;
+    TargetToken?: string;
   };
   TraktTv?: {
     Enabled?: boolean;
+    AuthToken?: string;
+    RefreshToken?: string;
     TokenExpirationDate?: string;
     SyncFrequency?: string;
   };
