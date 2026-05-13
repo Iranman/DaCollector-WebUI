@@ -78,7 +78,7 @@ export default function Log() {
 
     const conn = buildConnection('/signalr/logging');
 
-    conn.on('GetBacklog', (backlog: LogEntry[]) => {
+    conn.on('GetBacklog', (_backlog: LogEntry[]) => {
       // Backlog already loaded from REST; skip to avoid duplicates
     });
 
