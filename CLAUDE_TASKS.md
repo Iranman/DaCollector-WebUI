@@ -593,7 +593,7 @@ Completion notes (2026-05-14):
   - Integrity scan creation requires managed folders to exist and remains server-side only.
 - Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
 
-## P16 — Rename, Move, and Relocation Review — PENDING
+## P16 — Rename, Move, and Relocation Review — DONE
 
 Goal:
 - Surface DaCollector's rename/move review workflows without letting the browser manipulate files directly.
@@ -610,7 +610,19 @@ Acceptance criteria:
 - Apply actions require preview and explicit confirmation.
 - `npm run build` passes.
 
-## P17 — Collections and Plex Workflow Completion — PENDING
+Completion notes (2026-05-14):
+- Added `src/api/relocation.ts` for relocation summary, pipes, preview, and apply calls.
+- Added a Relocation tab to `/files` backed by `Media/Files` and `RelocationController`.
+- Added file search/page selection, default or stored pipe selection, move/rename/delete-empty-folder options, preview results, and apply results.
+- Apply stays disabled until preview results exist and requires explicit confirmation before calling the server-side relocate endpoint.
+- No browser-side filesystem access was added; source paths and proposed destinations are displayed from server API data only.
+- Backend follow-ups:
+  - Relocation preview/apply currently reports server-returned errors and no-change outcomes; there is no dedicated conflict DTO beyond `ErrorMessage`.
+  - The local smoke server had no media files, so preview/apply was not exercised against real file IDs.
+- Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
+- Live read-only API smoke against `http://127.0.0.1:38111` passed for `/api/v3/Relocation/Summary`, `/api/v3/Relocation/Pipe`, and `/api/v3/Media/Files?page=1&pageSize=1&includeReview=true&includeAbsolutePaths=false`; the local test server returned one relocation provider, one pipe, and zero media files.
+
+## P17 — Collections and Plex Workflow Completion — DONE
 
 Goal:
 - Make collection management and Plex target operations feel like a complete Shoko-style workflow.
@@ -628,6 +640,20 @@ Acceptance criteria:
 - Sync preview is understandable before apply.
 - Plex actions never imply media download or streaming.
 - `npm run build` passes.
+
+Completion notes (2026-05-14):
+- Added `CollectionBuilderController` client coverage through `collectionBuilderApi` and typed collection sync/Plex diff results in `src/api/collections.ts`.
+- Replaced raw collection-rule JSON editing with a guided builder modal driven by available collection builders.
+- Added builder-specific fields for provider IDs, media kind, limits, paging, language/region, and TMDB discover filters.
+- Added collection rule validation and readable rule summaries on collection rows and inside the editor.
+- Added Plex readiness validation on the Collections page using `DaCollectorStatus/Plex`, including configured section-key visibility and warnings.
+- Reworked sync actions into explicit Preview, Dry Run, and Apply states; Apply is disabled until a dry run exists for the selected collection and the Plex target is ready.
+- Added sync result review showing target, effective mode, matched/missing items, add/remove diff, warnings, and Plex diff counts when available.
+- Backend follow-ups:
+  - The server exposes collection builder descriptors but not per-builder option schemas, so the WebUI maps known builder keys to supported fields.
+  - The local smoke server had no configured Plex token/section key and no saved collections, so apply was not exercised.
+- Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
+- Live read-only API smoke against `http://127.0.0.1:38111` passed for `/api/v3/CollectionBuilder`, `/api/v3/ManagedCollection`, and `/api/v3/DaCollectorStatus/Plex`; the local server returned 15 builders, zero collections, and Plex warnings for missing token/section key.
 
 ## P18 — Operations and Admin Depth — PENDING
 

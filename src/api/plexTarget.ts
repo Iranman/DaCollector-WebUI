@@ -16,6 +16,7 @@ export interface PlexLibrarySection {
   Type: string;
   Scanner?: string;
   Agent?: string;
+  Language?: string;
 }
 
 export const plexTargetApi = {

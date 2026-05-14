@@ -44,10 +44,17 @@ import {
   IntegrityFileStatus,
   integrityApi,
 } from '../api/integrity';
+import { mediaApi, MediaFileDto } from '../api/media';
+import {
+  relocationApi,
+  RelocationPipe,
+  RelocationResult,
+  RelocationSummary,
+} from '../api/relocation';
 import { managedFoldersApi, ManagedFolder } from '../api/managedFolders';
 import { ApiError } from '../api/client';
 
-type ReviewTab = 'unmatched' | 'duplicates' | 'missing' | 'integrity';
+type ReviewTab = 'unmatched' | 'duplicates' | 'missing' | 'integrity' | 'relocation';
 type ReviewStatusFilter = 'all' | 'Pending' | 'Ignored' | 'ManualMatch';
 type ProviderFilter = 'all' | 'tmdb' | 'tvdb';
 type DuplicateMode = 'exact' | 'series' | 'episodes';
@@ -56,6 +63,7 @@ type MissingMode = 'series' | 'episodes';
 const UNMATCHED_PAGE_SIZE = 50;
 const DUPLICATE_PAGE_SIZE = 25;
 const REVIEW_PAGE_SIZE = 50;
+const RELOCATION_PAGE_SIZE = 25;
 
 interface FileState {
   expanded: boolean;
@@ -136,6 +144,24 @@ export default function FileReview() {
   const [loadingIntegrity, setLoadingIntegrity] = useState(false);
   const [runningIntegrity, setRunningIntegrity] = useState(false);
   const [deletingScanID, setDeletingScanID] = useState<number | null>(null);
+
+  const [relocationSummary, setRelocationSummary] = useState<RelocationSummary | null>(null);
+  const [relocationPipes, setRelocationPipes] = useState<RelocationPipe[]>([]);
+  const [relocationFiles, setRelocationFiles] = useState<MediaFileDto[]>([]);
+  const [relocationTotal, setRelocationTotal] = useState(0);
+  const [relocationPage, setRelocationPage] = useState(1);
+  const [relocationSearch, setRelocationSearch] = useState('');
+  const [selectedRelocationFileIDs, setSelectedRelocationFileIDs] = useState<number[]>([]);
+  const [selectedRelocationPipeID, setSelectedRelocationPipeID] = useState('default');
+  const [relocationMove, setRelocationMove] = useState(true);
+  const [relocationRename, setRelocationRename] = useState(true);
+  const [relocationAllowInsideDestination, setRelocationAllowInsideDestination] = useState(false);
+  const [relocationDeleteEmptyDirectories, setRelocationDeleteEmptyDirectories] = useState(true);
+  const [relocationPreviewResults, setRelocationPreviewResults] = useState<RelocationResult[] | null>(null);
+  const [relocationApplyResults, setRelocationApplyResults] = useState<RelocationResult[] | null>(null);
+  const [loadingRelocation, setLoadingRelocation] = useState(false);
+  const [previewingRelocation, setPreviewingRelocation] = useState(false);
+  const [applyingRelocation, setApplyingRelocation] = useState(false);
 
   const handleError = useCallback((err: unknown, fallback: string) => {
     if (err instanceof ApiError && err.status === 401) navigate('/login');
@@ -249,6 +275,47 @@ export default function FileReview() {
     }
   }, [handleError, integrityFileFilter, loadIntegrityFiles, selectedScanID]);
 
+  const relocationRunOptions = useMemo(() => ({
+    pipeID: selectedRelocationPipeID === 'default' ? undefined : selectedRelocationPipeID,
+    move: relocationMove,
+    rename: relocationRename,
+    allowRelocationInsideDestination: relocationAllowInsideDestination,
+    deleteEmptyDirectories: relocationDeleteEmptyDirectories,
+  }), [
+    relocationAllowInsideDestination,
+    relocationDeleteEmptyDirectories,
+    relocationMove,
+    relocationRename,
+    selectedRelocationPipeID,
+  ]);
+
+  const loadRelocation = useCallback(async () => {
+    setLoadingRelocation(true);
+    setError(null);
+    try {
+      const [summary, pipes, fileResult] = await Promise.all([
+        relocationApi.getSummary(),
+        relocationApi.getPipes(),
+        mediaApi.getFiles(relocationSearch.trim() || undefined, relocationPage, RELOCATION_PAGE_SIZE, true, false),
+      ]);
+      setRelocationSummary(summary);
+      setRelocationPipes(pipes);
+      setRelocationFiles(fileResult.List);
+      setRelocationTotal(fileResult.Total);
+      setSelectedRelocationFileIDs(current => {
+        const retained = current.filter(fileID => fileResult.List.some(file => file.FileID === fileID));
+        return retained.length === current.length ? current : retained;
+      });
+      if (selectedRelocationPipeID !== 'default' && !pipes.some(pipe => pipe.ID === selectedRelocationPipeID)) {
+        setSelectedRelocationPipeID('default');
+      }
+    } catch (err) {
+      handleError(err, 'Failed to load relocation review data.');
+    } finally {
+      setLoadingRelocation(false);
+    }
+  }, [handleError, relocationPage, relocationSearch, selectedRelocationPipeID]);
+
   useEffect(() => {
     if (activeTab === 'unmatched') void loadUnmatched();
   }, [activeTab, loadUnmatched]);
@@ -266,6 +333,10 @@ export default function FileReview() {
   }, [activeTab, loadIntegrity]);
 
   useEffect(() => {
+    if (activeTab === 'relocation') void loadRelocation();
+  }, [activeTab, loadRelocation]);
+
+  useEffect(() => {
     setUnmatchedPage(1);
   }, [includeIgnored, reviewStatusFilter]);
 
@@ -277,6 +348,15 @@ export default function FileReview() {
     setMissingSeriesPage(1);
     setMissingEpisodePage(1);
   }, [missingFilters]);
+
+  useEffect(() => {
+    setRelocationPage(1);
+  }, [relocationSearch]);
+
+  useEffect(() => {
+    setRelocationPreviewResults(null);
+    setRelocationApplyResults(null);
+  }, [relocationRunOptions, selectedRelocationFileIDs]);
 
   function getState(fileID: number): FileState {
     return fileStates[fileID] ?? defaultFileState();
@@ -524,11 +604,87 @@ export default function FileReview() {
     if (selectedScanID != null) await loadIntegrityFiles(selectedScanID, filter);
   }
 
+  function toggleRelocationFile(fileID: number) {
+    setSelectedRelocationFileIDs(current =>
+      current.includes(fileID)
+        ? current.filter(id => id !== fileID)
+        : [...current, fileID]
+    );
+  }
+
+  function toggleRelocationPageSelection() {
+    const pageIDs = relocationFiles.map(file => file.FileID);
+    const allSelected = pageIDs.length > 0 && pageIDs.every(fileID => selectedRelocationFileIDs.includes(fileID));
+    setSelectedRelocationFileIDs(current =>
+      allSelected
+        ? current.filter(fileID => !pageIDs.includes(fileID))
+        : [...current, ...pageIDs.filter(fileID => !current.includes(fileID))]
+    );
+  }
+
+  async function handlePreviewRelocation() {
+    if (selectedRelocationFileIDs.length === 0) {
+      setError('Select at least one file to preview.');
+      return;
+    }
+
+    setPreviewingRelocation(true);
+    setError(null);
+    setNotice(null);
+    setRelocationApplyResults(null);
+    try {
+      const results = await relocationApi.preview(selectedRelocationFileIDs, relocationRunOptions);
+      const successCount = results.filter(result => result.IsSuccess).length;
+      const moveCount = results.filter(result => result.IsSuccess && result.IsRelocated).length;
+      setRelocationPreviewResults(results);
+      setNotice(`Previewed ${results.length} file(s): ${moveCount} relocation change(s), ${successCount} successful result(s).`);
+    } catch (err) {
+      handleError(err, 'Relocation preview failed.');
+    } finally {
+      setPreviewingRelocation(false);
+    }
+  }
+
+  async function handleApplyRelocation() {
+    if (!relocationPreviewResults || relocationPreviewResults.length === 0) {
+      setError('Preview relocation before applying changes.');
+      return;
+    }
+
+    const successCount = relocationPreviewResults.filter(result => result.IsSuccess).length;
+    const changeCount = relocationPreviewResults.filter(result => result.IsSuccess && result.IsRelocated).length;
+    const failureCount = relocationPreviewResults.length - successCount;
+    const prompt = [
+      `Apply server-side relocation to ${selectedRelocationFileIDs.length} selected file(s)?`,
+      `Preview showed ${changeCount} rename/move change(s) and ${failureCount} warning/error result(s).`,
+      relocationDeleteEmptyDirectories ? 'Empty source directories may be deleted by the server when applicable.' : 'Empty source directories will be left in place.',
+      'Continue?',
+    ].join('\n');
+    if (!window.confirm(prompt)) return;
+
+    setApplyingRelocation(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const results = await relocationApi.relocate(selectedRelocationFileIDs, relocationRunOptions);
+      const appliedCount = results.filter(result => result.IsSuccess && result.IsRelocated).length;
+      const appliedFailures = results.filter(result => !result.IsSuccess).length;
+      setRelocationApplyResults(results);
+      setNotice(`Relocation applied: ${appliedCount} changed, ${appliedFailures} failed or warned.`);
+      await loadRelocation();
+    } catch (err) {
+      handleError(err, 'Relocation apply failed.');
+    } finally {
+      setApplyingRelocation(false);
+    }
+  }
+
   function refreshActiveTab() {
     if (activeTab === 'unmatched') void loadUnmatched();
     else if (activeTab === 'duplicates') void loadDuplicates();
     else if (activeTab === 'missing') void loadMissing();
-    else void loadIntegrity();
+    else if (activeTab === 'integrity') void loadIntegrity();
+    else void loadRelocation();
   }
 
   const visibleFiles = useMemo(() => files.filter(file =>
@@ -546,7 +702,7 @@ export default function FileReview() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-white">File Review</h1>
-          <p className="mt-0.5 text-xs text-gray-500">Review unmatched files, duplicates, missing episodes, and integrity scans.</p>
+          <p className="mt-0.5 text-xs text-gray-500">Review unmatched files, duplicates, missing episodes, integrity scans, and relocation previews.</p>
         </div>
         <button
           type="button"
@@ -556,7 +712,7 @@ export default function FileReview() {
           <RefreshCw
             size={13}
             className={
-              loadingUnmatched || loadingDuplicates || loadingMissing || loadingIntegrity ? 'animate-spin' : ''
+              loadingUnmatched || loadingDuplicates || loadingMissing || loadingIntegrity || loadingRelocation ? 'animate-spin' : ''
             }
           />
           Refresh
@@ -575,6 +731,9 @@ export default function FileReview() {
         </TabButton>
         <TabButton active={activeTab === 'integrity'} onClick={() => setActiveTab('integrity')} icon={<ShieldCheck size={14} />}>
           Integrity
+        </TabButton>
+        <TabButton active={activeTab === 'relocation'} onClick={() => setActiveTab('relocation')} icon={<FolderOpen size={14} />}>
+          Relocation
         </TabButton>
       </div>
 
@@ -692,6 +851,40 @@ export default function FileReview() {
           onStartScan={handleStartExistingScan}
           onDeleteScan={handleDeleteIntegrityScan}
           onFileFilter={handleIntegrityFilter}
+        />
+      )}
+
+      {activeTab === 'relocation' && (
+        <RelocationPanel
+          summary={relocationSummary}
+          pipes={relocationPipes}
+          files={relocationFiles}
+          total={relocationTotal}
+          page={relocationPage}
+          totalPages={Math.max(1, Math.ceil(relocationTotal / RELOCATION_PAGE_SIZE))}
+          search={relocationSearch}
+          selectedFileIDs={selectedRelocationFileIDs}
+          selectedPipeID={selectedRelocationPipeID}
+          move={relocationMove}
+          rename={relocationRename}
+          allowInsideDestination={relocationAllowInsideDestination}
+          deleteEmptyDirectories={relocationDeleteEmptyDirectories}
+          previewResults={relocationPreviewResults}
+          applyResults={relocationApplyResults}
+          loading={loadingRelocation}
+          previewing={previewingRelocation}
+          applying={applyingRelocation}
+          setPage={setRelocationPage}
+          setSearch={setRelocationSearch}
+          setSelectedPipeID={setSelectedRelocationPipeID}
+          setMove={setRelocationMove}
+          setRename={setRelocationRename}
+          setAllowInsideDestination={setRelocationAllowInsideDestination}
+          setDeleteEmptyDirectories={setRelocationDeleteEmptyDirectories}
+          onToggleFile={toggleRelocationFile}
+          onTogglePage={toggleRelocationPageSelection}
+          onPreview={handlePreviewRelocation}
+          onApply={handleApplyRelocation}
         />
       )}
     </div>
@@ -1735,6 +1928,353 @@ function IntegrityFileRow({ file }: { file: IntegrityCheckFile }) {
       </div>
     </div>
   );
+}
+
+function RelocationPanel({
+  summary,
+  pipes,
+  files,
+  total,
+  page,
+  totalPages,
+  search,
+  selectedFileIDs,
+  selectedPipeID,
+  move,
+  rename,
+  allowInsideDestination,
+  deleteEmptyDirectories,
+  previewResults,
+  applyResults,
+  loading,
+  previewing,
+  applying,
+  setPage,
+  setSearch,
+  setSelectedPipeID,
+  setMove,
+  setRename,
+  setAllowInsideDestination,
+  setDeleteEmptyDirectories,
+  onToggleFile,
+  onTogglePage,
+  onPreview,
+  onApply,
+}: {
+  summary: RelocationSummary | null;
+  pipes: RelocationPipe[];
+  files: MediaFileDto[];
+  total: number;
+  page: number;
+  totalPages: number;
+  search: string;
+  selectedFileIDs: number[];
+  selectedPipeID: string;
+  move: boolean;
+  rename: boolean;
+  allowInsideDestination: boolean;
+  deleteEmptyDirectories: boolean;
+  previewResults: RelocationResult[] | null;
+  applyResults: RelocationResult[] | null;
+  loading: boolean;
+  previewing: boolean;
+  applying: boolean;
+  setPage: React.Dispatch<React.SetStateAction<number>>;
+  setSearch: (value: string) => void;
+  setSelectedPipeID: (value: string) => void;
+  setMove: (value: boolean) => void;
+  setRename: (value: boolean) => void;
+  setAllowInsideDestination: (value: boolean) => void;
+  setDeleteEmptyDirectories: (value: boolean) => void;
+  onToggleFile: (fileID: number) => void;
+  onTogglePage: () => void;
+  onPreview: () => void;
+  onApply: () => void;
+}) {
+  const allVisibleSelected = files.length > 0 && files.every(file => selectedFileIDs.includes(file.FileID));
+  const fileLookup = useMemo(() => new Map(files.map(file => [file.FileID, file])), [files]);
+  const defaultPipe = pipes.find(pipe => pipe.IsDefault);
+  const successfulPreviewCount = previewResults?.filter(result => result.IsSuccess).length ?? 0;
+  const changedPreviewCount = previewResults?.filter(result => result.IsSuccess && result.IsRelocated).length ?? 0;
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[22rem_1fr]">
+      <div className="space-y-5">
+        <section className="app-card p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-400">Relocation Options</h2>
+          <div className="grid gap-3">
+            <SummaryCard label="Providers" value={summary?.ProviderCount ?? 0} />
+            <SummaryCard label="Move Default" value={summary?.MoveOnImport ? 'Enabled' : 'Off'} />
+            <SummaryCard label="Rename Default" value={summary?.RenameOnImport ? 'Enabled' : 'Off'} />
+          </div>
+
+          <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-gray-500">Pipe</label>
+          <select
+            value={selectedPipeID}
+            onChange={event => setSelectedPipeID(event.target.value)}
+            className="mt-1 w-full rounded-md border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-gray-100 outline-none app-focus"
+          >
+            <option value="default">Default pipe{defaultPipe ? ` - ${defaultPipe.Name}` : ''}</option>
+            {pipes.map(pipe => (
+              <option key={pipe.ID} value={pipe.ID} disabled={!pipe.IsUsable}>
+                {pipe.Name}{pipe.IsDefault ? ' (default)' : ''}{pipe.IsUsable ? '' : ' (unusable)'}
+              </option>
+            ))}
+          </select>
+
+          <div className="mt-4 space-y-3">
+            <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-400">
+              <input type="checkbox" checked={move} onChange={event => setMove(event.target.checked)} className="rounded border-gray-600 bg-gray-900 accent-blue-500" />
+              Move
+            </label>
+            <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-400">
+              <input type="checkbox" checked={rename} onChange={event => setRename(event.target.checked)} className="rounded border-gray-600 bg-gray-900 accent-blue-500" />
+              Rename
+            </label>
+            <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-400">
+              <input type="checkbox" checked={allowInsideDestination} onChange={event => setAllowInsideDestination(event.target.checked)} className="rounded border-gray-600 bg-gray-900 accent-blue-500" />
+              Allow destination folders
+            </label>
+            <label className="flex cursor-pointer select-none items-center gap-2 text-sm text-gray-400">
+              <input type="checkbox" checked={deleteEmptyDirectories} onChange={event => setDeleteEmptyDirectories(event.target.checked)} className="rounded border-gray-600 bg-gray-900 accent-blue-500" />
+              Delete empty folders
+            </label>
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={previewing || applying || selectedFileIDs.length === 0 || (!move && !rename)}
+              onClick={onPreview}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-gray-800 px-3 py-2 text-sm font-medium text-gray-200 transition-colors hover:bg-gray-700 disabled:opacity-50"
+            >
+              <Eye size={14} />
+              {previewing ? 'Previewing...' : 'Preview'}
+            </button>
+            <button
+              type="button"
+              disabled={applying || previewing || !previewResults || previewResults.length === 0}
+              onClick={onApply}
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+            >
+              <Play size={14} />
+              {applying ? 'Applying...' : 'Apply'}
+            </button>
+          </div>
+          <p className="mt-3 text-xs text-gray-500">
+            {selectedFileIDs.length} selected - {changedPreviewCount} previewed change{changedPreviewCount === 1 ? '' : 's'} - {successfulPreviewCount} successful
+          </p>
+        </section>
+
+        <section className="app-card p-5">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-400">Find Files</h2>
+          <input
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+            className="w-full rounded-md border border-gray-700 bg-gray-900/70 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none app-focus"
+            placeholder="Search path or file ID"
+          />
+          <button
+            type="button"
+            onClick={onTogglePage}
+            disabled={files.length === 0}
+            className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-gray-800 px-3 py-2 text-sm text-gray-300 transition-colors hover:bg-gray-700 disabled:opacity-50"
+          >
+            <CheckCircle2 size={14} />
+            {allVisibleSelected ? 'Clear Page' : 'Select Page'}
+          </button>
+          <p className="mt-3 text-xs text-gray-500">{total} files</p>
+        </section>
+      </div>
+
+      <div className="space-y-5">
+        <section className="app-card overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800/70 px-5 py-4">
+            <div>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">Files</h2>
+              <p className="mt-1 text-xs text-gray-500">Page {page} of {totalPages}</p>
+            </div>
+          </div>
+          <div className="divide-y divide-gray-800/60">
+            {loading && files.length === 0 ? (
+              <SpinnerBlock />
+            ) : files.length === 0 ? (
+              <EmptyState title="No files found." detail="Adjust the search to find files eligible for relocation preview." />
+            ) : (
+              files.map(file => (
+                <RelocationFileRow
+                  key={file.FileID}
+                  file={file}
+                  selected={selectedFileIDs.includes(file.FileID)}
+                  onToggle={() => onToggleFile(file.FileID)}
+                />
+              ))
+            )}
+          </div>
+        </section>
+
+        {totalPages > 1 && <Pagination page={page} totalPages={totalPages} setPage={setPage} label={`${total} files`} />}
+
+        {previewResults && (
+          <RelocationResultList
+            title="Preview"
+            results={previewResults}
+            fileLookup={fileLookup}
+          />
+        )}
+
+        {applyResults && (
+          <RelocationResultList
+            title="Applied"
+            results={applyResults}
+            fileLookup={fileLookup}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RelocationFileRow({
+  file,
+  selected,
+  onToggle,
+}: {
+  file: MediaFileDto;
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const primaryLocation = getPrimaryLocation(file);
+
+  return (
+    <label className="flex cursor-pointer items-start gap-3 px-5 py-3 transition-colors hover:bg-gray-900/30">
+      <input
+        type="checkbox"
+        checked={selected}
+        onChange={onToggle}
+        className="mt-1 rounded border-gray-600 bg-gray-900 accent-blue-500"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm text-gray-100" title={primaryLocation}>
+          {primaryLocation}
+        </div>
+        <p className="mt-0.5 text-xs text-gray-500">
+          File {file.FileID} - {formatBytes(file.SizeBytes)} - {file.Locations.length} location{file.Locations.length === 1 ? '' : 's'}
+        </p>
+      </div>
+      <span className={`rounded px-2 py-1 text-[11px] font-semibold uppercase ${file.Locations.some(location => location.IsAvailable) ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+        {file.Locations.some(location => location.IsAvailable) ? 'Available' : 'Missing'}
+      </span>
+    </label>
+  );
+}
+
+function RelocationResultList({
+  title,
+  results,
+  fileLookup,
+}: {
+  title: string;
+  results: RelocationResult[];
+  fileLookup: Map<number, MediaFileDto>;
+}) {
+  const successCount = results.filter(result => result.IsSuccess).length;
+  const changedCount = results.filter(result => result.IsSuccess && result.IsRelocated).length;
+
+  return (
+    <section className="app-card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800/70 px-5 py-4">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-400">{title} Results</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            {results.length} result{results.length === 1 ? '' : 's'} - {changedCount} changed - {successCount} successful
+          </p>
+        </div>
+      </div>
+      <div className="divide-y divide-gray-800/60">
+        {results.map(result => (
+          <RelocationResultRow
+            key={`${title}-${result.FileID}-${result.FileLocationID ?? 'none'}`}
+            result={result}
+            file={fileLookup.get(result.FileID)}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function RelocationResultRow({
+  result,
+  file,
+}: {
+  result: RelocationResult;
+  file?: MediaFileDto;
+}) {
+  const source = file ? getPrimaryLocation(file) : `File ${result.FileID}`;
+  const destination = result.RelativePath ?? result.AbsolutePath ?? 'No destination returned';
+  const warnings = getRelocationWarnings(result);
+
+  return (
+    <div className="px-5 py-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-100">File {result.FileID}</span>
+            <RelocationStatusBadge result={result} />
+            {result.PipeName && <span className="rounded bg-gray-800 px-2 py-1 text-xs text-gray-400">{result.PipeName}</span>}
+          </div>
+          <div className="grid gap-2 text-xs md:grid-cols-2">
+            <div className="min-w-0">
+              <div className="uppercase tracking-wide text-gray-600">Source</div>
+              <div className="truncate text-gray-300" title={source}>{source}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="uppercase tracking-wide text-gray-600">Destination</div>
+              <div className="truncate text-gray-300" title={result.AbsolutePath ?? destination}>{destination}</div>
+            </div>
+          </div>
+          {warnings.length > 0 && (
+            <div className="space-y-1">
+              {warnings.map(warning => (
+                <p key={warning} className="flex items-center gap-1.5 text-xs text-yellow-300">
+                  <AlertTriangle size={12} />
+                  {warning}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RelocationStatusBadge({ result }: { result: RelocationResult }) {
+  let label = 'Blocked';
+  let className = 'bg-red-600/20 text-red-400';
+  if (result.IsSuccess && result.IsRelocated) {
+    label = result.IsPreview ? 'Will Change' : 'Changed';
+    className = 'bg-blue-600/20 text-blue-300';
+  } else if (result.IsSuccess) {
+    label = 'No Change';
+    className = 'bg-gray-700/50 text-gray-400';
+  }
+
+  return <span className={`rounded px-2 py-1 text-[11px] font-semibold uppercase ${className}`}>{label}</span>;
+}
+
+function getRelocationWarnings(result: RelocationResult) {
+  const warnings: string[] = [];
+  if (result.ErrorMessage) warnings.push(result.ErrorMessage);
+  if (result.IsSuccess && result.IsRelocated === false) warnings.push('Already at the target location.');
+  if (result.IsSuccess && !result.RelativePath && !result.AbsolutePath) warnings.push('The server did not return a destination path.');
+  return warnings;
+}
+
+function getPrimaryLocation(file: MediaFileDto) {
+  const location = file.Locations.find(item => item.IsAvailable) ?? file.Locations[0];
+  return location?.RelativePath ?? location?.AbsolutePath ?? `File ${file.FileID}`;
 }
 
 function SummaryCard({ label, value }: { label: string; value: string | number }) {
