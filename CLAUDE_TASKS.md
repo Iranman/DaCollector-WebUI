@@ -3,16 +3,18 @@
 Context:
 - Repo: `F:\Collection manager\DaCollector-WebUI`
 - Scope source of truth: `AGENTS.md`
-- Goal: rewrite the React WebUI to visually match Shoko Server's Web UI as closely as possible while keeping DaCollector branding and existing behavior.
+- Goal: rewrite and maintain the React WebUI so it visually and behaviorally mimics Shoko-WebUI (`https://github.com/ShokoAnime/Shoko-WebUI`) as closely as possible while keeping DaCollector branding and existing behavior.
 - Stack must stay React 18 + TypeScript + Tailwind CSS v3 + React Router v6 + Vite.
 - Do not add a UI framework or change Vite/TypeScript config.
 - Do not change `src/api/client.ts` auth behavior.
 - No backend/API changes in this repo. If a backend gap blocks a UI feature, record it as a backend follow-up instead of faking production behavior.
 - Product boundary: WebUI is only the browser interface for DaCollector Server. Do not add direct filesystem scanning, media fingerprinting, provider matching, local file rename/move execution, downloads, streaming, or Plex scanner/agent logic here.
 - DaCollector Relay is the planned Plex scanner/agent/adapter. WebUI may configure or monitor Relay through server APIs later, but Relay behavior belongs outside this repo.
+- Mimic Shoko-WebUI at the UX/product layer: top navigation, dark translucent panels, settings organization, setup/login flow, dashboard/card treatment, responsive behavior, and live status/API-client patterns. Do not blindly copy Shoko anime-specific domain behavior, server-specific internals, or upstream-only dependencies into DaCollector.
 
-Status as of 2026-05-11:
-- P0-P8 are implemented and verified in the React WebUI.
+Status as of 2026-05-14:
+- P0-P15 are implemented and verified in the React WebUI.
+- P16-P20 below are the remaining approved roadmap for closing the Shoko-WebUI and DaCollector workflow gaps.
 - `/settings` now redirects to `/settings/general`, while `/settings/:section` still drives the active settings section.
 - Collections now use the real `/api/v3/ManagedCollection` backend contract and include add, edit, preview, sync dry-run, and delete controls.
 - `npm run build` passes.
@@ -23,13 +25,15 @@ Status as of 2026-05-11:
 - Provider cleanup is complete in this repo: Settings, Actions, User Management, and agent docs now expose only TMDB and TVDB.
 
 Reference material:
+- Upstream Shoko-WebUI repo: `https://github.com/ShokoAnime/Shoko-WebUI`
 - User screenshots: `f:/pictures/Screenshots/Screenshot 2026-05-07 144122.png` through `Screenshot 2026-05-07 144354.png`
 - Shoko docs reference: `https://docs.shokoanime.com/getting-started/running-shoko-server`
-- Current pages:
-  - `src/components/Layout.tsx` currently uses a left sidebar and must be rewritten to Shoko's top navbar.
-  - `src/pages/Setup.tsx` and `src/pages/Login.tsx` already contain the right flow logic; restyle only.
-  - `src/pages/Settings.tsx` exists but must be rewritten into the Shoko two-column settings panel.
-  - `src/pages/Dashboard.tsx` and `src/pages/Collections.tsx` keep existing data logic and get restyled.
+- Current implemented routes:
+  - `/setup`, `/login`
+  - `/dashboard`, `/collections`, `/settings`, `/settings/:section`
+  - `/media`, `/media/:kind/:provider/:providerID`, `/files`, `/folders`, `/parser`, `/utilities`, `/log`, `/actions`
+- Current API client modules:
+  - `actions`, `auth`, `client`, `collections`, `configuration`, `dacollectorStatus`, `duplicates`, `fileReview`, `init`, `integrity`, `logging`, `managedFolders`, `media`, `parser`, `plex`, `plexTarget`, `providerMatch`, `queue`, `releaseManagement`, `settings`, `tags`, `tmdb`, `tokens`, `tvdb`, `users`, `webui`
 
 ---
 
@@ -104,7 +108,7 @@ Tasks:
 - Add fixed top navbar, `h-14`, full width:
   - left: DaCollector logo/avatar and app name
   - center-left nav: Dashboard, Collection, Utilities, Log, Actions
-  - right: notification count (Bell icon + badge), user avatar/name, settings gear (Settings icon), logout (LogOut icon), Discord placeholder, GitHub placeholder (Github icon)
+  - right: real queue badge, current user avatar/name, settings gear (Settings icon), logout (LogOut icon), and no placeholder social links
 - Use `NavLink` active styling exactly as specified:
   - active `text-white`
   - inactive `text-gray-400 hover:text-gray-200`
@@ -304,19 +308,393 @@ Added routes: `media`, `files`, `parser`
 
 ---
 
+## P9 — Baseline Gap Audit and Approved Roadmap — DONE
+
+Approval:
+- User approved this roadmap after the 2026-05-14 WebUI gap review.
+
+Current WebUI route inventory:
+- Public/setup routes: `/setup`, `/login`
+- Protected app routes: `/dashboard`, `/collections`, `/settings`, `/settings/:section`, `/media`, `/files`, `/folders`, `/parser`, `/utilities`, `/log`, `/actions`
+
+Current WebUI API client inventory:
+- `src/api/actions.ts`
+- `src/api/auth.ts`
+- `src/api/client.ts`
+- `src/api/configuration.ts`
+- `src/api/collections.ts`
+- `src/api/dacollectorStatus.ts`
+- `src/api/fileReview.ts`
+- `src/api/init.ts`
+- `src/api/logging.ts`
+- `src/api/managedFolders.ts`
+- `src/api/media.ts`
+- `src/api/parser.ts`
+- `src/api/plex.ts`
+- `src/api/plexTarget.ts`
+- `src/api/queue.ts`
+- `src/api/settings.ts`
+- `src/api/tags.ts`
+- `src/api/tokens.ts`
+- `src/api/users.ts`
+- `src/api/webui.ts`
+
+Server v3 controllers not yet meaningfully surfaced in the React WebUI:
+- `AVDumpController`
+- `CollectionBuilderController`
+- `DatabaseController`
+- `DebugController`
+- `EpisodeController`
+- `FileController`
+- `FilterController`
+- `FolderController`
+- `GroupController`
+- `HashingController`
+- `ImageController`
+- `MediaCatalogController`
+- `MetadataController`
+- `PlaylistController`
+- `PluginController`
+- `PluginPackageController`
+- `ReleaseInfoController`
+- `ReleaseManagementMultipleReleasesController`
+- `RelocationController`
+- `ReverseTreeController`
+- `SeriesController`
+- `TreeController`
+
+Practical gaps:
+- App shell static user/notification affordances and placeholder social links were identified here and closed in P10.
+- Dashboard readiness/status gaps were closed in P11.
+- Settings avatar/tag restrictions, WebUI theme/update controls, and configuration-backed hashing/release/relocation/database visibility were closed in P12.
+- Media library detail views and provider workflows were closed in P13/P14.
+- Remaining provider backend gaps: direct TMDB link/unlink endpoints are not exposed; TVDB direct link/unlink requires a manually entered MediaSeries ID because no TVDB linked-series lookup exists; linked-file lookup is exposed for TMDB items only.
+- File review center expansion was closed in P15. Relocation/rename/move review remains for P16.
+- Collections work, but rule creation is still too raw compared with a guided Shoko-style builder.
+- Plex target setup is present in Settings, but safe sync, preview, Plex library validation, and Plex duplicate review need real pages.
+- Operations pages are functional but basic; queue/log/actions need better detail, filtering, confirmations, and admin-only handling.
+- Plugin/package APIs are not surfaced yet; WebUI update/theme APIs were surfaced in P12.
+- Stack alignment remains a later explicit decision; do not migrate to React Query, pnpm, React 19, Tailwind 4, or Redux until the workflow gaps are intentionally prioritized.
+
+Verification:
+- `npm run build` passed on 2026-05-14 with the existing Vite/module-type warnings only.
+- P10 can start from this baseline.
+
+## P10 — App Shell Polish and Responsive Navigation — DONE
+
+Goal:
+- Bring the application shell closer to Shoko-WebUI quality while keeping DaCollector navigation usable as the route count grows.
+
+Tasks:
+- Add responsive mobile navigation for all current protected routes.
+- Replace static `Default` user/avatar with `/api/v3/User/Current`.
+- Replace static notification `0` with real queue/status-derived data, or remove the badge until a real notification source exists.
+- Replace placeholder Discord/GitHub `#` links with real links or remove them.
+- Group crowded DaCollector-only routes into Shoko-like top-level sections without hiding critical workflows.
+- Preserve existing auth/logout behavior through `src/api/client.ts`.
+
+Acceptance criteria:
+- Desktop navigation remains Shoko-like and uncluttered.
+- Mobile navigation can reach every protected route.
+- User display is real data when authenticated.
+- No placeholder links remain.
+- `npm run build` passes.
+
+Completion notes (2026-05-14):
+- `src/components/Layout.tsx` now groups Library, Collections, Folders, Files, and Parser under a desktop `Collection` menu.
+- Mobile navigation now exposes every protected route through a hamburger menu.
+- User display now loads `/api/v3/User/Current` via `usersApi.current()`.
+- Queue badge now uses `/api/v3/Queue` plus the existing aggregate SignalR queue feed; the badge is hidden when the count is zero.
+- Placeholder Discord/GitHub links were removed from the app shell.
+- `src/api/users.ts` now includes `current()`.
+- `AGENTS.md` was updated so future shell work keeps real user/queue data and does not reintroduce placeholder social links.
+- Verification: `npm run build` passed with the existing Vite/module-type warnings only.
+- Dev server started at `http://127.0.0.1:5173/webui/` and returned HTTP `200`.
+
+## P11 — Status Dashboard Completion — DONE
+
+Goal:
+- Make Dashboard the first-install and runtime health surface.
+
+Tasks:
+- Add DaCollector readiness cards from `/api/v3/DaCollectorStatus`.
+- Show provider readiness, capability flags, Plex target status, server version, WebUI version, and queue state.
+- Add actionable warnings for missing managed folders, missing provider keys, missing Plex config, failed Plex connectivity, and failed internet connectivity if the server exposes it.
+- Keep collection stats and queue widgets.
+- Avoid hardcoded fake health values.
+
+Acceptance criteria:
+- Dashboard exposes server readiness without needing Settings or logs first.
+- Each warning points to the relevant page or setting.
+- Empty/partial backend responses render cleanly.
+- `npm run build` passes.
+
+Completion notes (2026-05-14):
+- Added `src/api/dacollectorStatus.ts` for:
+  - `GET /api/v3/DaCollectorStatus`
+  - `GET /api/v3/DaCollectorStatus/Providers`
+  - `GET /api/v3/DaCollectorStatus/Capabilities`
+  - `GET /api/v3/DaCollectorStatus/Plex`
+- Expanded `src/api/init.ts` with the full component version response shape so Dashboard can show Server and WebUI versions.
+- Reworked `src/pages/Dashboard.tsx` to show:
+  - Server state, uptime, managed folder count, series count, file count.
+  - Readiness warnings linked to Setup, Folders, Settings, or Logs as appropriate.
+  - Queue live status.
+  - Plex target readiness.
+  - Provider readiness.
+  - Collection manager sync/config status.
+  - Collection health and watch progress.
+  - Server capability checklist.
+- Verified `GET /api/v3/DaCollectorStatus` against local Docker on `http://127.0.0.1:38111` using the temporary local admin token; response matched the new client shape.
+- Verification: `npm run build` passed with the existing Vite/module-type warnings only.
+
+## P12 — Settings Completion — DONE
+
+Goal:
+- Finish the Shoko-style settings experience for DaCollector-specific server configuration.
+
+Tasks:
+- Complete User Management:
+  - Current-user profile view.
+  - Avatar display/edit if supported by the API.
+  - Tag restriction UI using server tag/filter endpoints.
+  - Password/session behavior aligned with server user APIs.
+- Add WebUI settings:
+  - Theme list/apply/remove where `WebUIController` supports it.
+  - WebUI update/install/status actions only if appropriate for DaCollector deployment mode.
+- Add configuration-backed sections for:
+  - Hashing.
+  - Release info.
+  - Relocation/rename rules.
+  - Database/backup visibility.
+  - Server configuration validation through `ConfigurationController` where useful.
+- Ensure every setting maps to a real server field or records a backend follow-up.
+
+Acceptance criteria:
+- Settings remains a Shoko-like two-column panel on desktop and stacked layout on mobile.
+- Unsupported fields show clear errors or are omitted.
+- No fake saves.
+- `npm run build` passes.
+
+Completion notes (2026-05-14):
+- Added API clients for:
+  - `GET/POST/DELETE /api/v3/WebUI/Theme...` and WebUI version/update actions in `src/api/webui.ts`.
+  - `GET /api/v3/Tag/AniDB` and `GET /api/v3/Tag/User` in `src/api/tags.ts`.
+  - `GET /api/v3/Configuration`, configuration load, schema, and validation in `src/api/configuration.ts`.
+- Expanded `src/api/users.ts` with current-user update/password APIs plus `Avatar` and `RestrictedTags`.
+- Expanded `src/api/settings.ts` with the server `CollectionManager` settings shape used by Dashboard and Settings.
+- Added Settings sections for:
+  - Profile: current-user avatar upload/removal, display name, Plex usernames, and password/API-key revocation behavior.
+  - Web UI: theme list/add/update/remove, latest WebUI/server version checks, WebUI update, and manual-update report actions.
+  - Hashing, Release Info, Relocation, and Database: configuration-backed cards with restart/env metadata and `ConfigurationController` validation.
+- Completed User Management avatar editing and restricted-tag assignment through real server endpoints.
+- Backend follow-up: active theme selection/apply is omitted because `WebUIController` exposes theme install/update/remove/CSS, but no dedicated active-theme field.
+- Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
+
+## P13 — Library Detail Views — DONE
+
+Goal:
+- Turn `/media` from list-only into a useful library browser.
+
+Tasks:
+- Add movie detail route.
+- Add show detail route.
+- Show overview, images, provider IDs, external IDs, genres, runtime/status, files, file locations, and update timestamps.
+- Add seasons/episodes for shows where server APIs support them.
+- Add refresh/link actions only after provider workflow clients exist.
+- Keep TMDB/TVDB provider scope unless the server deliberately adds another provider.
+
+Acceptance criteria:
+- Users can inspect a movie/show without leaving the WebUI.
+- Detail pages degrade cleanly when images or provider fields are missing.
+- `npm run build` passes.
+
+Completion notes (2026-05-14):
+- Added `/media/:kind/:provider/:providerID` routes with `src/pages/MediaDetail.tsx`.
+- Expanded `src/api/media.ts` with movie/show detail, show seasons, show episodes, and generic file DTO support.
+- Detail pages show overview, poster/backdrop when usable, provider IDs, external IDs, genres, runtime/status, seasons/episodes, linked DaCollector series, TMDB linked files, file locations, and update timestamps.
+- TVDB detail pages degrade cleanly where the server does not expose linked-series or linked-file lookup.
+- Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
+- Live route smoke passed for `http://127.0.0.1:5173/webui/media/movies/tmdb/1` and `http://127.0.0.1:5173/webui/media/shows/tmdb/1`.
+
+## P14 — Provider Match Workflows — DONE
+
+Goal:
+- Give TMDB/TVDB linking and refresh workflows first-class UI coverage.
+
+Tasks:
+- Add API clients for `TmdbController`, `TvdbController`, and `ProviderMatchController`.
+- Add provider search UI from media/detail pages.
+- Add link/unlink controls for movies and shows.
+- Add refresh controls for linked TMDB/TVDB items.
+- Add preferred ordering controls where supported.
+- Add image download/refresh controls where supported.
+- Add match review UI for ambiguous provider candidates.
+
+Acceptance criteria:
+- Provider decisions are made through server APIs, not in the browser.
+- Every link/unlink/refresh action has visible result/error state.
+- `npm run build` passes.
+
+Completion notes (2026-05-14):
+- Added API clients for:
+  - `src/api/tmdb.ts`: TMDB online movie/show search, linked DaCollector series/files, refresh, image download, and show preferred ordering.
+  - `src/api/tvdb.ts`: TVDB refresh plus direct show/movie link and unlink by MediaSeries ID.
+  - `src/api/providerMatch.ts`: pending candidates, per-series candidates, scan, approve, and reject.
+- Added a `Matches` tab to `/media` for pending TMDB/TVDB provider-match review, including scan-all-unmatched, approve, and reject.
+- Added provider actions on media detail pages:
+  - TMDB refresh, image download, online search/cache, preferred show ordering, linked-series candidate scan/approve/reject.
+  - TVDB refresh and direct link/unlink by manually entered MediaSeries ID.
+- Backend follow-ups:
+  - TMDB direct link/unlink is not exposed by `TmdbController`; the UI uses `ProviderMatchController` instead of inventing browser-side matching.
+  - TVDB has direct link/unlink endpoints but no linked-series lookup endpoint, so the WebUI cannot auto-populate current TVDB links.
+  - TVDB online search is not exposed; the UI does not fake TVDB search.
+  - Generic linked-file lookup for provider detail pages is currently TMDB-only through `TmdbController`.
+- Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
+- Live read-only API smoke against `http://127.0.0.1:38111` passed for `/api/v3/Media/Movies?provider=all&pageSize=1`, `/api/v3/Media/Shows?provider=all&pageSize=1`, and `/api/v3/ProviderMatch/Candidates`; the local test server currently returned zero movies, zero shows, and zero pending matches.
+
+## P15 — File Review Center Expansion — DONE
+
+Goal:
+- Expand `/files` into the central review hub for local media cleanup.
+
+Tasks:
+- Keep unmatched file review as the first tab.
+- Add duplicate review using duplicate/release-management duplicate APIs.
+- Add missing review using missing/release-management APIs.
+- Add corrupt/integrity review using `IntegrityCheckController`.
+- Add batch actions with clear confirmation for destructive or large operations.
+- Add filters for ignored/manual match/provider/status.
+
+Acceptance criteria:
+- Review tabs are easy to scan and Shoko-like.
+- Destructive actions require explicit confirmation.
+- Missing backend support is recorded as a backend follow-up.
+- `npm run build` passes.
+
+Completion notes (2026-05-14):
+- Added API clients for:
+  - `src/api/duplicates.ts`: exact duplicate summary, cleanup plans, dry-run delete preview, and confirmed duplicate location delete.
+  - `src/api/releaseManagement.ts`: duplicate-file series/episodes and missing-episode series/episodes.
+  - `src/api/integrity.ts`: integrity scan list, file results, create/start, and delete.
+- Reworked `/files` into a four-tab review center:
+  - Unmatched: preserved parser review, ignore/unignore, refresh parse, scan, approve/reject, and clear manual match.
+  - Duplicates: exact duplicate cleanup plans plus release-management duplicate series/episode summaries.
+  - Missing: missing series and missing episode review with collecting/finished filters.
+  - Integrity: managed-folder scan creation/start, scan list, scan deletion, and result filtering for errors/OK/waiting/statuses.
+- Added filters for unmatched status, candidate provider, ignored files, duplicate availability, duplicate preferred path, missing collecting-only, missing finished-series-only, and integrity file status.
+- Destructive/large actions now require confirmation:
+  - Unmatched batch scan warns before running, especially when online provider lookup is enabled.
+  - Exact duplicate delete first calls the server dry-run endpoint, then confirms before `confirm=true`.
+  - Integrity scan creation/start and scan deletion both confirm first.
+- Backend follow-ups:
+  - Duplicate episode/file rows are review-only; there is no React-side batch file removal for release-management duplicates yet beyond exact duplicate location cleanup.
+  - Missing episode review is informational; no acquisition/download workflow is added or implied.
+  - Integrity scan creation requires managed folders to exist and remains server-side only.
+- Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
+
+## P16 — Rename, Move, and Relocation Review — PENDING
+
+Goal:
+- Surface DaCollector's rename/move review workflows without letting the browser manipulate files directly.
+
+Tasks:
+- Add API clients for `RelocationController` and related release/file endpoints.
+- Add preview screens showing source path, proposed destination, conflicts, and warnings.
+- Add apply flows only after preview.
+- Add clear success/error summaries.
+- Keep all filesystem operations server-side.
+
+Acceptance criteria:
+- No local filesystem access is added to the WebUI.
+- Apply actions require preview and explicit confirmation.
+- `npm run build` passes.
+
+## P17 — Collections and Plex Workflow Completion — PENDING
+
+Goal:
+- Make collection management and Plex target operations feel like a complete Shoko-style workflow.
+
+Tasks:
+- Replace raw collection rule editing with a guided builder driven by available collection builders.
+- Add builder-specific fields, validation, and readable rule summaries.
+- Add preview diff and warnings before sync.
+- Add dry-run and apply sync states.
+- Add Plex library validation against configured section key.
+- Add Plex-safe sync and review pages once Plex is reachable through server APIs.
+
+Acceptance criteria:
+- Users can create a collection without hand-writing raw options.
+- Sync preview is understandable before apply.
+- Plex actions never imply media download or streaming.
+- `npm run build` passes.
+
+## P18 — Operations and Admin Depth — PENDING
+
+Goal:
+- Bring queue, logs, actions, plugins, and update controls up to production-admin usefulness.
+
+Tasks:
+- Improve queue page with filters, job details, queued/running/blocked sections, and supported retry/cancel controls.
+- Improve log page with saved filters, copy details, exception expansion, and better mobile layout.
+- Expand actions page to include safe admin actions that exist in `ActionController`.
+- Add plugin/package pages if `PluginController` and `PluginPackageController` are intended for DaCollector.
+- Add WebUI update/theme pages only where they make sense for Docker/bundled deployment.
+
+Acceptance criteria:
+- Admin-only actions are visibly separated from normal user actions.
+- Dangerous actions are confirmed.
+- Unsupported deployment-mode actions are hidden or clearly explained.
+- `npm run build` passes.
+
+## P19 — Stack Alignment Decision — PENDING
+
+Goal:
+- Decide whether adopting more of Shoko-WebUI's current frontend stack is worth the cost.
+
+Tasks:
+- Evaluate React Query first for server-state caching and refetch handling.
+- Evaluate pnpm only if package-manager consistency with upstream becomes valuable.
+- Evaluate React 19/Tailwind 4/Vite upgrade as a separate migration.
+- Evaluate Redux only if global UI/session state becomes complex enough to justify it.
+- Write an explicit migration plan before any stack change.
+
+Acceptance criteria:
+- No stack migration happens as incidental feature work.
+- Any proposed migration has risk, benefit, file impact, and rollback notes.
+
+## P20 — Verification and Handoff Standard — PENDING
+
+Goal:
+- Keep future WebUI slices verifiable and Docker-embeddable.
+
+Tasks:
+- Run `npm run build`.
+- Smoke test every public/protected route.
+- Capture desktop and mobile screenshots for changed surfaces.
+- Verify embedded WebUI through the server at `/webui` after Docker/server packaging changes.
+- Update this task file with exact pass/fail evidence after each slice.
+
+Acceptance criteria:
+- Every completed roadmap item has build evidence.
+- Browser/screenshot evidence exists for visual changes.
+- Docker/server packaging impact is verified when relevant.
+
 ## Claude Coordination Notes
 
-Implementation order:
-1. P1 theme foundation and shared components.
-2. P2 top navbar layout.
-3. P3 setup/login restyle.
-4. P4 settings rewrite.
-5. P5 dashboard restyle.
-6. P6 collections restyle.
-7. P7 verification/screenshots.
+Next implementation order:
+1. P10 app shell polish.
+2. P11 status dashboard completion.
+3. P12 settings completion.
+4. P16 rename/move/relocation review.
+5. P17 collections and Plex workflow completion.
+6. P18 operations/admin depth.
+7. P19 stack alignment decision.
+8. P20 verification/handoff standard.
 
 Important:
 - Do not start by changing backend code.
 - Do not port the old static HTML from `DaCollector.Server/webui`; this repo is the React WebUI.
 - Do not add provider/Plex setup wizard steps unless the user explicitly expands the scope beyond `AGENTS.md`.
 - If a route or endpoint in `AGENTS.md` is wrong, verify against the running backend or existing API modules and add a blocker note before changing behavior.
+- Upstream Shoko-WebUI currently uses a larger stack than this repo. Keep DaCollector-WebUI on its declared React 18 + TypeScript + Tailwind v3 + React Router v6 + Vite stack unless the user explicitly asks for a stack migration.

@@ -1,7 +1,9 @@
 # DaCollector WebUI — Codex Agent Specification
 
 ## Goal
-Rewrite the DaCollector WebUI to visually match **Shoko Server's web interface** as closely as possible. Study the design description below carefully — every detail matters. Do not invent new patterns; replicate Shoko's patterns exactly.
+Rewrite and maintain the DaCollector WebUI so it visually and behaviorally mimics **Shoko-WebUI** as closely as possible while keeping DaCollector branding and DaCollector-specific workflows. The upstream reference is `https://github.com/ShokoAnime/Shoko-WebUI`. Study the design description below carefully — every detail matters. Do not invent new navigation, settings, or workflow patterns when a Shoko-WebUI pattern already applies.
+
+Mimic Shoko-WebUI at the product and UX layer, not by blindly copying anime-specific domain behavior or server-specific internals. DaCollector should reuse Shoko-style layout, dark translucent panels, top navigation, settings organization, setup/login flow, dashboard/card treatment, live status behavior, and API-client architecture where it fits. DaCollector must still call DaCollector Server APIs and keep local media, Plex target, duplicate review, missing/corrupt review, rename/move review, and Relay-aware workflows aligned with this product.
 
 ## Product Boundary
 DaCollector WebUI is the browser interface for DaCollector Server. It should present setup, folder, provider, Plex target, collection, duplicate, missing/corrupt, and rename/move workflows by calling server APIs.
@@ -16,6 +18,8 @@ Do not implement backend behavior in this repo. The WebUI must not scan folders 
 - React Router v6
 - Vite
 - No new npm packages unless absolutely necessary (e.g. `lucide-react` for icons is acceptable)
+
+Note: upstream Shoko-WebUI may move faster than this repo and currently uses a larger React/Vite/Tailwind client stack. Do not upgrade DaCollector-WebUI's framework or package manager only to match upstream unless the task explicitly calls for a stack migration. If a Shoko-WebUI feature depends on Redux Toolkit, React Query, pnpm, or another upstream-only tool, first decide whether the same UX can be implemented within this repo's existing stack.
 
 ---
 
@@ -47,7 +51,7 @@ Do not implement backend behavior in this repo. The WebUI must not scan folders 
 
 ### Navbar structure (full width, fixed at top, `h-14` / 56px):
 ```
-[ Logo icon + "DaCollector" ]   [ Dashboard | Collection | Utilities | Log | Actions ]   [ 🔔 0 | 👤 Default | ⚙ | ↪ ]
+[ Logo icon + "DaCollector" ]   [ Dashboard | Collection | Utilities | Log | Actions ]   [ queue badge | current user | ⚙ | ↪ ]
 ```
 
 - Background: `bg-[#0d0d1a]/90 backdrop-blur-sm border-b border-gray-700/50`
@@ -57,11 +61,11 @@ Do not implement backend behavior in this repo. The WebUI must not scan folders 
   - Inactive: `text-gray-400 hover:text-gray-200`
   - Spacing: `gap-6` between items, `text-sm font-medium`
 - **Right controls** (flex row, `gap-4`, `items-center`):
-  - Notification badge: bell icon + blue badge number (`0`), `text-sm`
-  - User avatar: small circle with first letter of username + username text (e.g. "D  Default"), `text-sm text-gray-300`
+  - Notification badge: bell icon + blue badge number derived from real queue/status data; hide the badge when there is no count to show.
+  - User avatar: small circle with first letter of the authenticated username + username text from `/api/v3/User/Current`, `text-sm text-gray-300`
   - Settings gear icon: links to `/settings`
   - Logout icon (arrow-right-from-bracket / power icon): calls `clearApiKey()` and navigates to `/login`
-  - Discord icon (links to Discord — just a placeholder `#`) and GitHub icon (placeholder `#`) — small icon buttons, `text-gray-400 hover:text-gray-200`
+  - Discord/GitHub links may be shown only when real project links are available; do not leave placeholder `#` links in the app shell.
 
 ### Page body below navbar:
 - `pt-14` to account for fixed navbar
@@ -174,7 +178,7 @@ This is the most important page to get right. Shoko's Settings is a **floating t
   - "New Password" password input (hidden unless Change clicked)
   - "Logout all sessions" toggle
 - **Tag Restrictions**:
-  - "Available Tags" — searchable list of tags (from API `/api/v3/Filter/Tag/User` or similar)
+  - "Available Tags" — searchable list of tags from `/api/v3/Tag/AniDB` for restricted tag IDs, with `/api/v3/Tag/User` available for custom tag display.
   - Tags can be added to restricted list
 
 #### 8. API Keys
@@ -185,6 +189,15 @@ This is the most important page to get right. Shoko's Settings is a **floating t
   - Key name (left)
   - "Delete" button (red, right)
 - Note: load from `GET /api/v3/Auth/Tokens`, delete with `DELETE /api/v3/Auth/Token/{token}`
+
+#### 9. Web UI
+- Theme list/add/update/remove through `/api/v3/WebUI/Theme`.
+- WebUI latest-version checks and update/manual-update actions through `/api/v3/WebUI`.
+- Do not add an active-theme selector until the server exposes a real active-theme setting.
+
+#### 10. Configuration-backed Sections
+- Hashing, Release Info, Relocation, and Database should use `/api/v3/Configuration` metadata and validation.
+- Do not implement browser-side hashing, rename/move, backup, or file operations in this repo.
 
 ---
 
@@ -276,13 +289,19 @@ Same card layout as Setup. Fields: Username, Password. "Sign In" button. No chan
 
 ---
 
-## Routing (no changes)
+## Routing
 - `/setup` → Setup (first-run)
 - `/login` → Login
 - `/dashboard` → Dashboard
 - `/collections` → Collections
 - `/settings` → Settings (default to first section: General)
 - `/settings/:section` → Settings with active section
+- `/media` → Library list with Movies, Shows, and Provider Match tabs
+- `/media/:kind/:provider/:providerID` → provider-backed movie/show detail
+- `/files` → file review
+- `/folders` → managed folders
+- `/parser` → filename parser
+- `/utilities`, `/log`, `/actions` → operations surfaces
 
 ---
 
@@ -291,7 +310,7 @@ Same card layout as Setup. Fields: Username, Password. "Sign In" button. No chan
 ### Settings API
 - `GET /api/v3/Settings` — returns current settings (partial `ServerSettings` object)
 - `PATCH /api/v3/Settings` — update settings (send only changed fields)
-- The existing `src/api/settings.ts` type `ServerSettings` needs to be **expanded** to cover all the new settings fields:
+- Keep `src/api/settings.ts` aligned to fields actually returned by DaCollector Server:
   ```ts
   interface ServerSettings {
     TMDB?: {
@@ -309,15 +328,59 @@ Same card layout as Setup. Fields: Username, Password. "Sign In" button. No chan
       AutoGroupSeries?: boolean; UseSeriesRelationGrouping?: boolean;
       ExcludeRelationTypes?: string[];
     };
+    CollectionManager?: { ScheduledSyncEnabled?: boolean; SyncIntervalMinutes?: number; };
   }
   ```
 
 ### User Management API
 - `GET /api/v3/User` — list users
+- `GET /api/v3/User/Current` — current user profile
+- `PUT /api/v3/User/Current` — update current user profile fields
+- `POST /api/v3/User/Current/ChangePassword` — change current user password
 - `GET /api/v3/User/{id}` — get user
 - `PUT /api/v3/User/{id}` — update user
 - `DELETE /api/v3/User/{id}` — delete user
 - `POST /api/v3/User` — create user
+- `POST /api/v3/User/{id}/ChangePassword` — admin password change
+- User update bodies may include `Avatar` and `RestrictedTags`; do not invent client-only fields.
+
+### Tag API
+- `GET /api/v3/Tag/AniDB` — server tag list used by `RestrictedTags`
+- `GET /api/v3/Tag/User` — custom tag list
+
+### WebUI API
+- `GET /api/v3/WebUI/Theme` — list themes
+- `POST /api/v3/WebUI/Theme/AddFromURL` — add or preview a theme
+- `POST /api/v3/WebUI/Theme/{id}/Update` — update a theme from its URL
+- `DELETE /api/v3/WebUI/Theme/{id}` — remove a theme
+- `GET /api/v3/WebUI/LatestVersion` and `GET /api/v3/WebUI/LatestServerVersion` — version checks
+- `POST /api/v3/WebUI/Update` and `POST /api/v3/WebUI/Update/ReportManualUpdate` — update actions
+
+### Configuration API
+- `GET /api/v3/Configuration` — list registered server configuration metadata
+- `GET /api/v3/Configuration/{id}` — load current configuration JSON
+- `POST /api/v3/Configuration/{id}/Validate` — validate current configuration JSON
+
+### Media and Provider APIs
+- `GET /api/v3/Media/Movies` and `GET /api/v3/Media/Shows` — provider-filtered media lists.
+- `GET /api/v3/Media/Movies/{provider}/{providerID}` and `GET /api/v3/Media/Shows/{provider}/{providerID}` — detail pages.
+- `GET /api/v3/Media/Shows/{provider}/{providerID}/Seasons` and `/Episodes` — show detail episode browser.
+- `GET /api/v3/Tmdb/{Movie|Show}/{id}/DaCollector/Series` and `/File` — TMDB linked local series/files.
+- `GET /api/v3/Tmdb/{Movie|Show}/Online/Search` — TMDB search/cache workflow.
+- `POST /api/v3/Tmdb/{Movie|Show}/{id}/Action/Refresh` and `/Action/DownloadImages` — TMDB refresh/image actions.
+- `GET /api/v3/Tmdb/Show/{id}/Ordering` and `POST /api/v3/Tmdb/Show/{id}/Ordering/SetPreferred` — preferred ordering.
+- `POST /api/v3/Tvdb/{Movie|Show}/{id}/Refresh`, `/Link/{seriesID}`, and `DELETE /Link/{seriesID}` — TVDB refresh/direct series linking.
+- `GET /api/v3/ProviderMatch/Candidates`, `POST /api/v3/ProviderMatch/Scan`, `POST /api/v3/ProviderMatch/Series/{seriesID}/Scan`, `POST /api/v3/ProviderMatch/Candidates/{id}/Approve`, and `DELETE /api/v3/ProviderMatch/Candidates/{id}` — ambiguous match review.
+- Backend gaps must stay visible instead of being faked: TMDB direct link/unlink is not exposed, TVDB linked-series lookup is not exposed, TVDB search is not exposed, and linked-file lookup is currently TMDB-only.
+
+### File Review and Cleanup APIs
+- `GET /api/v3/MediaFileReview/Files/Unmatched`, `/Files/{fileID}`, `/Files/{fileID}/Candidates`, and candidate approve/reject endpoints drive the unmatched review tab.
+- `POST /api/v3/MediaFileReview/Files/ScanMatches` is a large batch scan; confirm before running, especially when `includeOnlineSearch=true`.
+- `GET /api/v3/Duplicates/Exact/Summary` and `/Exact/CleanupPlan` drive exact duplicate cleanup review.
+- `DELETE /api/v3/Duplicates/Exact/Location/{locationID}?confirm=false` must be called before confirmed deletion; never skip the dry-run step.
+- `GET /api/v3/ReleaseManagement/DuplicateFiles/Series`, `/Episodes`, `GET /api/v3/ReleaseManagement/MissingEpisodes/Series`, and `/Episodes` are review/informational workflows in WebUI.
+- `GET/POST/DELETE /api/v3/IntegrityCheck` plus `/Start` and `/File` drive the integrity tab. Integrity scans are server-side only and should be clearly confirmed before starting or deleting.
+- Do not add browser-side filesystem cleanup, acquisition, or download behavior. Missing episode review must stay informational unless the server adds an explicit safe action.
 
 ### API Keys
 - `GET /api/v3/Auth/Tokens` — list API tokens (returns `Array<{ Name: string; Token: string }>`)
@@ -335,9 +398,19 @@ src/
     auth.ts            (unchanged)
     init.ts            (unchanged)
     collections.ts     (unchanged)
-    settings.ts        (expand ServerSettings interface)
-    users.ts           (NEW — user CRUD)
-    tokens.ts          (NEW — API key CRUD)
+    configuration.ts   (configuration metadata/load/validation)
+    duplicates.ts      (exact duplicate summary/cleanup/delete preview)
+    integrity.ts       (integrity scans/results)
+    media.ts           (media list/detail/seasons/episodes/files)
+    providerMatch.ts   (provider candidate scan/approve/reject)
+    releaseManagement.ts (duplicate/missing series and episode review)
+    settings.ts        (ServerSettings interface)
+    tags.ts            (tag lists)
+    tmdb.ts            (TMDB search/refresh/images/ordering/local links)
+    tvdb.ts            (TVDB refresh/direct link/unlink)
+    users.ts           (user CRUD/profile/password)
+    tokens.ts          (API key CRUD)
+    webui.ts           (theme/update/version APIs)
     plex.ts            (unchanged)
   components/
     Layout.tsx         (REWRITE — top navbar instead of left sidebar)
@@ -354,8 +427,11 @@ src/
     Dashboard.tsx      (restyle)
     Collections.tsx    (restyle)
     Settings.tsx       (FULL REWRITE — two-column, all sections)
+    Media.tsx          (library list + provider-match queue)
+    MediaDetail.tsx    (movie/show detail and provider actions)
+    FileReview.tsx     (unmatched, duplicate, missing, and integrity review center)
   index.css            (add background gradient to body)
-  App.tsx              (minor: add /settings/:section route)
+  App.tsx              (settings and media detail routes)
 ```
 
 ---
