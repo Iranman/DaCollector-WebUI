@@ -681,7 +681,7 @@ Implementation notes:
 - WebUI update/theme controls were already surfaced in P12 under Settings; P18 keeps them there because they are deployment-specific and already explain the exposed server behavior.
 - Verification: `npm run build` passed with the existing Vite/module-type, SignalR Rollup annotation, and chunk-size warnings only. `git diff --check` passed with CRLF warnings only.
 
-## P19 — Stack Alignment Decision — PENDING
+## P19 — Stack Alignment Decision — DONE
 
 Goal:
 - Decide whether adopting more of Shoko-WebUI's current frontend stack is worth the cost.
@@ -697,7 +697,34 @@ Acceptance criteria:
 - No stack migration happens as incidental feature work.
 - Any proposed migration has risk, benefit, file impact, and rollback notes.
 
-## P20 — Verification and Handoff Standard — PENDING
+Decision:
+- Do not migrate the stack as part of this roadmap. Keep DaCollector-WebUI on React 18, TypeScript, Tailwind CSS v3, React Router v6, Vite, and npm for now.
+- Upstream check on 2026-05-14: `https://raw.githubusercontent.com/ShokoAnime/Shoko-WebUI/master/package.json` shows Shoko-WebUI on a larger Node >=22 stack with React 19, React Router 7, TanStack React Query, Redux Toolkit/react-redux, Tailwind CSS 4, Vite 8, TypeScript 5.9, pnpm scripts, Monaco, Sentry, virtualized UI helpers, and broader lint/format tooling.
+- DaCollector-WebUI is still small enough that the current explicit `useEffect` + API module pattern remains understandable. The higher-value next stack candidate is React Query, but only after server-state duplication/refetch behavior becomes a maintenance problem.
+
+Migration plan before any future stack change:
+- React Query candidate:
+  - Benefit: central server-state cache, request dedupe, predictable refetch/retry behavior, and cleaner loading/error handling on route transitions.
+  - Risk: broad page churn, query key discipline, harder optimistic updates if introduced too early, and another required mental model.
+  - File impact: `package.json`, lockfile, `src/main.tsx` or `src/App.tsx` query client provider, API call sites in route pages, and tests/smoke coverage for affected pages.
+  - Rollback: revert provider/dependency/lockfile changes and restore direct API calls page by page.
+- pnpm candidate:
+  - Benefit: closer upstream script style and deterministic workspace-friendly dependency installs if this grows into a multi-package frontend workspace.
+  - Risk: developer/tooling friction, CI workflow changes, lockfile replacement, and no immediate runtime benefit.
+  - File impact: package manager lockfile, `.github/workflows/ci.yml`, README/agent setup notes, and local install commands.
+  - Rollback: restore npm lockfile and npm workflow commands.
+- React 19/Tailwind 4/Vite major upgrade:
+  - Benefit: closer upstream, newer compiler/build path, and access to newer React/Tailwind ecosystem behavior.
+  - Risk: high blast radius across routing, CSS, build config, generated bundles, and Docker/server packaging assumptions.
+  - File impact: `package.json`, lockfile, `vite.config.ts`, Tailwind/PostCSS config, global CSS, route/component code, CI, and release packaging.
+  - Rollback: revert the migration commit and preserve the pre-upgrade lockfile.
+- Redux candidate:
+  - Benefit: centralized global UI/session state if cross-route state becomes complex.
+  - Risk: boilerplate and indirection without enough shared state to justify it.
+  - File impact: store setup, provider wiring, slice files, and pages currently owning local state.
+  - Rollback: remove provider/store/slices and return state to route-local hooks.
+
+## P20 — Verification and Handoff Standard — DONE
 
 Goal:
 - Keep future WebUI slices verifiable and Docker-embeddable.
@@ -714,6 +741,24 @@ Acceptance criteria:
 - Browser/screenshot evidence exists for visual changes.
 - Docker/server packaging impact is verified when relevant.
 
+Implementation notes:
+- Established the standard in this task file: each completed slice should record build, route/API smoke, screenshot evidence for visual changes, and Docker/server `/webui` verification when packaging or embedded deployment changes.
+- P19/P20 did not change Docker/server packaging, so embedded Docker verification is not applicable for this slice.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-14 with the existing Vite CJS API deprecation, package module-type, SignalR Rollup annotation, and chunk-size warnings only.
+- Route smoke against the dev server at `http://127.0.0.1:5173` passed with HTTP 200 for `/webui/setup`, `/webui/login`, `/webui/dashboard`, `/webui/collections`, `/webui/settings/general`, `/webui/media`, `/webui/media/movies/tmdb/1`, `/webui/files`, `/webui/folders`, `/webui/parser`, `/webui/utilities`, `/webui/log`, `/webui/actions`, and `/webui/plugins`.
+- Screenshot evidence captured with Edge headless for changed P18 admin surfaces:
+  - `docs/verification/p20/utilities-desktop.png`
+  - `docs/verification/p20/utilities-mobile.png`
+  - `docs/verification/p20/log-desktop.png`
+  - `docs/verification/p20/log-mobile.png`
+  - `docs/verification/p20/actions-desktop.png`
+  - `docs/verification/p20/actions-mobile.png`
+  - `docs/verification/p20/plugins-desktop.png`
+  - `docs/verification/p20/plugins-mobile.png`
+- The temporary same-origin screenshot auth helper was removed after capture and is not part of the finished worktree.
+
 ## Claude Coordination Notes
 
 Next implementation order:
@@ -723,8 +768,8 @@ Next implementation order:
 4. P16 rename/move/relocation review.
 5. P17 collections and Plex workflow completion.
 6. P18 operations/admin depth.
-7. P19 stack alignment decision.
-8. P20 verification/handoff standard.
+7. P19 stack alignment decision. DONE
+8. P20 verification/handoff standard. DONE
 
 Important:
 - Do not start by changing backend code.
