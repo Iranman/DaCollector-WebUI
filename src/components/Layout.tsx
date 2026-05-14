@@ -23,6 +23,7 @@ import { clearApiKey } from '../api/client';
 import { queueApi, QueueStatus } from '../api/queue';
 import { usersApi, User } from '../api/users';
 import { buildConnection } from '../lib/signalr';
+import BrandMark from './BrandMark';
 
 interface NavItem {
   to: string;
@@ -123,12 +124,10 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen text-gray-100">
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-gray-700/50 bg-[#0d0d1a]/90 backdrop-blur-sm">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-shoko-line bg-[#050505]/92 backdrop-blur-sm">
         <div className="flex h-14 items-center px-4 sm:px-6">
           <NavLink to="/dashboard" onClick={closeMobile} className="flex min-w-0 items-center gap-3 pr-5 lg:pr-10">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-500 text-sm font-semibold text-white">
-              D
-            </span>
+            <BrandMark />
             <span className="truncate text-lg font-semibold tracking-wide text-white">DaCollector</span>
           </NavLink>
 
@@ -159,7 +158,7 @@ export default function Layout() {
             </NavLink>
 
             <div className="hidden items-center gap-2 text-sm text-gray-300 sm:flex" title={username}>
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-500 text-sm font-semibold text-[#0d0d1a]">
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-500 text-sm font-semibold text-black">
                 {userInitial}
               </span>
               <span className="max-w-28 truncate">{username}</span>
@@ -197,10 +196,10 @@ export default function Layout() {
         </div>
 
         {mobileOpen && (
-          <nav className="border-t border-gray-700/50 bg-[#0d0d1a]/95 px-4 py-4 shadow-panel lg:hidden">
+          <nav className="border-t border-shoko-line bg-[#050505]/95 px-4 py-4 shadow-panel lg:hidden">
             <div className="mb-4 flex items-center justify-between border-b border-gray-800/70 pb-3">
               <div className="flex min-w-0 items-center gap-2 text-sm text-gray-300">
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-500 text-sm font-semibold text-[#0d0d1a]">
+                <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-500 text-sm font-semibold text-black">
                   {userInitial}
                 </span>
                 <span className="truncate">{username}</span>
@@ -271,7 +270,7 @@ function DesktopGroup({ group, active }: { group: NavGroup; active: boolean }) {
         {group.label}
         <ChevronDown size={13} />
       </button>
-      <div className="invisible absolute left-0 top-full z-50 min-w-48 translate-y-2 border border-gray-700/50 bg-[#0d0d1a]/95 py-2 opacity-0 shadow-panel backdrop-blur-sm transition group-focus-within:visible group-focus-within:translate-y-1 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-1 group-hover:opacity-100">
+      <div className="invisible absolute left-0 top-full z-50 min-w-48 translate-y-2 border border-shoko-line bg-[#050505]/95 py-2 opacity-0 shadow-panel backdrop-blur-sm transition group-focus-within:visible group-focus-within:translate-y-1 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-1 group-hover:opacity-100">
         {group.items.map(item => (
           <NavLink
             key={item.to}

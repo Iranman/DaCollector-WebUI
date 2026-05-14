@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { initApi } from '../api/init';
 import { authApi } from '../api/auth';
 import { setApiKey, getApiKey } from '../api/client';
+import BrandMark from '../components/BrandMark';
 import Button from '../components/ui/Button';
 import TextInput from '../components/ui/TextInput';
 
@@ -134,7 +135,7 @@ export default function Setup() {
 function BrandHeader({ subtitle }: { subtitle: string }) {
   return (
     <div className="mb-8 text-center">
-      <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-blue-500 text-lg font-semibold text-[#0d0d1a]">D</div>
+      <BrandMark className="mx-auto h-14 w-14" />
       <h1 className="mt-4 text-2xl font-semibold text-white">DaCollector</h1>
       <p className="mt-2 text-sm leading-6 text-gray-400">{subtitle}</p>
     </div>
