@@ -18,9 +18,25 @@ export interface Credentials {
   Password: string;
 }
 
+export interface ComponentVersion {
+  Version?: string;
+  MinimumServerVersion?: string;
+  Commit?: string;
+  ReleaseChannel?: string | number;
+  ReleaseDate?: string;
+  Tag?: string;
+  Description?: string;
+}
+
+export interface ComponentVersionSet {
+  Server: ComponentVersion;
+  MediaInfo?: ComponentVersion;
+  WebUI?: ComponentVersion;
+}
+
 export const initApi = {
   getStatus: () => api.get<ServerStatus>('/api/v3/Init/Status'),
   setDefaultUser: (creds: Credentials) => api.post<void>('/api/v3/Init/DefaultUser', creds),
   completeSetup: () => api.post<void>('/api/v3/Init/CompleteSetup'),
-  getVersion: () => api.get<{ Server: { Version: string; Commit?: string } }>('/api/v3/Init/Version'),
+  getVersion: () => api.get<ComponentVersionSet>('/api/v3/Init/Version'),
 };

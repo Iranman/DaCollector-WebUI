@@ -1,10 +1,14 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, KeyRound, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { Check, Image as ImageIcon, KeyRound, Link2, Palette, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { ApiError } from '../api/client';
+import { configurationApi, ConfigurationInfo } from '../api/configuration';
+import { ComponentVersion } from '../api/init';
 import { settingsApi, ServerSettings } from '../api/settings';
+import { tagsApi, Tag } from '../api/tags';
 import { ApiToken, tokensApi } from '../api/tokens';
 import { User, CreateOrUpdateUserBody, CreateUserBody, usersApi } from '../api/users';
+import { ReleaseChannel, webuiApi, WebUITheme } from '../api/webui';
 import { plexTargetApi, PlexLibrarySection, PlexServerIdentity } from '../api/plexTarget';
 import Button from '../components/ui/Button';
 import SectionHeader from '../components/ui/SectionHeader';
@@ -15,18 +19,26 @@ import Toggle from '../components/ui/Toggle';
 
 type SectionId =
   | 'general'
+  | 'profile'
+  | 'web-ui'
   | 'import'
   | 'tvdb'
   | 'metadata-sites'
   | 'collection'
   | 'integrations'
   | 'user-management'
-  | 'api-keys';
+  | 'api-keys'
+  | 'hashing'
+  | 'release-info'
+  | 'relocation'
+  | 'database';
 
 type SettingValue = string | number | boolean | string[] | undefined;
 
 const sections: Array<{ id: SectionId; label: string }> = [
   { id: 'general', label: 'General' },
+  { id: 'profile', label: 'Profile' },
+  { id: 'web-ui', label: 'Web UI' },
   { id: 'import', label: 'Import' },
   { id: 'tvdb', label: 'TVDB' },
   { id: 'metadata-sites', label: 'Metadata Sites' },
@@ -34,7 +46,13 @@ const sections: Array<{ id: SectionId; label: string }> = [
   { id: 'integrations', label: 'Integrations' },
   { id: 'user-management', label: 'User Management' },
   { id: 'api-keys', label: 'API Keys' },
+  { id: 'hashing', label: 'Hashing' },
+  { id: 'release-info', label: 'Release Info' },
+  { id: 'relocation', label: 'Relocation' },
+  { id: 'database', label: 'Database' },
 ];
+
+const standaloneSections: SectionId[] = ['profile', 'web-ui', 'user-management', 'api-keys', 'hashing', 'release-info', 'relocation', 'database'];
 
 const relationTypes = [
   'Dissimilar Titles',
@@ -216,6 +234,12 @@ export default function Settings() {
               {activeSection === 'general' && (
                 <GeneralSection settings={settings} />
               )}
+              {activeSection === 'profile' && (
+                <ProfileSection />
+              )}
+              {activeSection === 'web-ui' && (
+                <WebUISettingsSection />
+              )}
               {activeSection === 'import' && (
                 <ImportSection settings={settings} updateSetting={updateSetting} />
               )}
@@ -246,9 +270,37 @@ export default function Settings() {
                   onDelete={handleDeleteToken}
                 />
               )}
+              {activeSection === 'hashing' && (
+                <ConfigurationSummarySection
+                  title="Hashing"
+                  description="Review hashing-related server configuration exposed by the generic configuration API."
+                  queries={['hash', 'avdump', 'file']}
+                />
+              )}
+              {activeSection === 'release-info' && (
+                <ConfigurationSummarySection
+                  title="Release Info"
+                  description="Review release parser and release metadata configuration that the server exposes."
+                  queries={['release', 'parser']}
+                />
+              )}
+              {activeSection === 'relocation' && (
+                <ConfigurationSummarySection
+                  title="Relocation"
+                  description="Review rename, relocation, and file move configuration without adding browser-side file operations."
+                  queries={['relocation', 'rename', 'move']}
+                />
+              )}
+              {activeSection === 'database' && (
+                <ConfigurationSummarySection
+                  title="Database"
+                  description="Review database and backup configuration visibility, restart requirements, and validation status."
+                  queries={['database', 'backup', 'core']}
+                />
+              )}
             </div>
 
-            {!['api-keys', 'user-management'].includes(activeSection) && (
+            {!standaloneSections.includes(activeSection) && (
               <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-gray-700/50 pt-5">
                 <Button variant="secondary" onClick={() => window.location.reload()}>
                   Cancel
@@ -544,13 +596,519 @@ function IntegrationsSection({
   );
 }
 
-type EditDraft = { Username: string; IsAdmin: boolean; IsTrkt: boolean; PlexUsernames: string };
+type ProfileDraft = { Username: string; PlexUsernames: string; Avatar: string };
+
+function ProfileSection() {
+  const [profile, setProfile] = useState<User | null>(null);
+  const [draft, setDraft] = useState<ProfileDraft>({ Username: '', PlexUsernames: '', Avatar: '' });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
+  const [revokeKeys, setRevokeKeys] = useState(true);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordSaved, setPasswordSaved] = useState(false);
+
+  useEffect(() => { load(); }, []);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const current = await usersApi.current();
+      setProfile(current);
+      setDraft({
+        Username: current.Username,
+        PlexUsernames: current.PlexUsernames ?? '',
+        Avatar: current.Avatar ?? '',
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load profile.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSaveProfile() {
+    if (!draft.Username.trim()) {
+      setError('Username is required.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const updated = await usersApi.updateCurrent({
+        Username: draft.Username.trim(),
+        PlexUsernames: draft.PlexUsernames.trim(),
+        Avatar: draft.Avatar,
+      });
+      setProfile(updated);
+      setDraft({
+        Username: updated.Username,
+        PlexUsernames: updated.PlexUsernames ?? '',
+        Avatar: updated.Avatar ?? '',
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Profile save failed.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleAvatarFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setDraft(prev => ({ ...prev, Avatar: reader.result as string }));
+      }
+    };
+    reader.onerror = () => setError('Failed to read avatar file.');
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  async function handleChangeCurrentPassword() {
+    if (!password) {
+      setPasswordError('Password cannot be empty.');
+      return;
+    }
+    setPasswordSaving(true);
+    setPasswordError(null);
+    setPasswordSaved(false);
+    try {
+      await usersApi.changeCurrentPassword(password, revokeKeys);
+      setPassword('');
+      setPasswordSaved(true);
+      setTimeout(() => setPasswordSaved(false), 3000);
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : 'Password change failed.');
+    } finally {
+      setPasswordSaving(false);
+    }
+  }
+
+  if (loading) return <InlineSpinner />;
+
+  return (
+    <div className="space-y-7">
+      <SectionHeader title="Profile" description="Manage the current user's profile, avatar, Plex usernames, and password." />
+      {error && <Alert tone="error">{error}</Alert>}
+      {saved && <Alert tone="success">Profile saved.</Alert>}
+
+      <SettingGroup title="Current User">
+        <div className="mb-4 flex items-center gap-4">
+          <AvatarPreview user={profile} avatar={draft.Avatar} size="lg" />
+          <div className="min-w-0">
+            <div className="text-sm font-medium text-gray-100">{profile?.Username ?? 'Current user'}</div>
+            <div className="text-xs text-gray-500">{profile?.IsAdmin ? 'Administrator' : 'User'}</div>
+          </div>
+        </div>
+        <SettingsRow label="Avatar">
+          <div className="flex flex-wrap justify-end gap-2">
+            <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-gray-600 bg-gray-800/70 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-gray-500 hover:text-gray-100">
+              <ImageIcon size={13} className="mr-1.5" />
+              Pick
+              <input type="file" accept="image/*" className="hidden" onChange={handleAvatarFile} />
+            </label>
+            <Button variant="secondary" size="sm" onClick={() => setDraft({ ...draft, Avatar: '' })}>
+              Remove
+            </Button>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Display Name">
+          <TextInput value={draft.Username} onChange={e => setDraft({ ...draft, Username: e.target.value })} />
+        </SettingsRow>
+        <SettingsRow label="Plex Usernames">
+          <TextInput value={draft.PlexUsernames} onChange={e => setDraft({ ...draft, PlexUsernames: e.target.value })} placeholder="comma-separated" />
+        </SettingsRow>
+      </SettingGroup>
+
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={() => load()} disabled={saving}>Cancel</Button>
+        <Button onClick={handleSaveProfile} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</Button>
+      </div>
+
+      <SettingGroup title="Password">
+        {passwordError && <Alert tone="error">{passwordError}</Alert>}
+        {passwordSaved && <Alert tone="success">Password changed.</Alert>}
+        <SettingsRow label="New Password">
+          <TextInput type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" />
+        </SettingsRow>
+        <SettingsRow label="Revoke API Keys">
+          <div className="flex justify-end">
+            <Toggle checked={revokeKeys} onChange={setRevokeKeys} />
+          </div>
+        </SettingsRow>
+        <div className="flex justify-end pt-3">
+          <Button onClick={handleChangeCurrentPassword} disabled={passwordSaving}>
+            {passwordSaving ? 'Changing...' : 'Change Password'}
+          </Button>
+        </div>
+      </SettingGroup>
+    </div>
+  );
+}
+
+function WebUISettingsSection() {
+  const [themes, setThemes] = useState<WebUITheme[]>([]);
+  const [webVersion, setWebVersion] = useState<ComponentVersion | null>(null);
+  const [serverVersion, setServerVersion] = useState<ComponentVersion | null>(null);
+  const [releaseChannel, setReleaseChannel] = useState<ReleaseChannel>('Auto');
+  const [allowIncompatible, setAllowIncompatible] = useState(false);
+  const [themeUrl, setThemeUrl] = useState('');
+  const [previewTheme, setPreviewTheme] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [versionLoading, setVersionLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => { load(); }, []);
+
+  async function load(forceRefresh = false) {
+    setLoading(true);
+    setError(null);
+    try {
+      setThemes(await webuiApi.listThemes(forceRefresh));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load WebUI themes.');
+    } finally {
+      setLoading(false);
+    }
+    await loadVersions(releaseChannel);
+  }
+
+  async function loadVersions(channel = releaseChannel, force = false) {
+    setVersionLoading(true);
+    try {
+      const [latestWeb, latestServer] = await Promise.all([
+        webuiApi.latestVersion(channel, force, allowIncompatible),
+        webuiApi.latestServerVersion(channel, force),
+      ]);
+      setWebVersion(latestWeb);
+      setServerVersion(latestServer);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to check WebUI versions.');
+    } finally {
+      setVersionLoading(false);
+    }
+  }
+
+  async function handleAddTheme() {
+    const url = themeUrl.trim();
+    if (!url) {
+      setError('Enter a theme URL.');
+      return;
+    }
+    setActionLoading('add-theme');
+    setError(null);
+    setMessage(null);
+    try {
+      const theme = await webuiApi.addThemeFromUrl(url, previewTheme);
+      setMessage(previewTheme ? `Theme preview loaded: ${theme.Name}` : `Theme added: ${theme.Name}`);
+      setThemeUrl('');
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Theme add failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleDeleteTheme(theme: WebUITheme) {
+    setActionLoading(`delete-${theme.ID}`);
+    setError(null);
+    setMessage(null);
+    try {
+      await webuiApi.deleteTheme(theme.ID);
+      setMessage(`Theme removed: ${theme.Name}`);
+      setThemes(prev => prev.filter(item => item.ID !== theme.ID));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Theme remove failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleUpdateTheme(theme: WebUITheme) {
+    setActionLoading(`update-${theme.ID}`);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await webuiApi.updateTheme(theme.ID);
+      setMessage(`Theme updated: ${updated.Name}`);
+      setThemes(prev => prev.map(item => item.ID === theme.ID ? updated : item));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Theme update failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleUpdateWebUI() {
+    setActionLoading('webui-update');
+    setError(null);
+    setMessage(null);
+    try {
+      await webuiApi.update(releaseChannel, allowIncompatible);
+      setMessage('WebUI update started.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'WebUI update failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function handleReportManualUpdate() {
+    setActionLoading('manual-update');
+    setError(null);
+    setMessage(null);
+    try {
+      await webuiApi.reportManualUpdate();
+      setMessage('Manual WebUI update reported.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Manual update report failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  return (
+    <div className="space-y-7">
+      <SectionHeader title="Web UI" description="Manage WebUI themes and server-backed update checks." />
+      {error && <Alert tone="error">{error}</Alert>}
+      {message && <Alert tone="success">{message}</Alert>}
+
+      <SettingGroup title="Versions">
+        <SettingsRow label="Release Channel">
+          <Select
+            value={releaseChannel}
+            onChange={e => {
+              const channel = e.target.value as ReleaseChannel;
+              setReleaseChannel(channel);
+              void loadVersions(channel);
+            }}
+          >
+            <option value="Auto">Auto</option>
+            <option value="Stable">Stable</option>
+            <option value="Dev">Dev</option>
+            <option value="Debug">Debug</option>
+          </Select>
+        </SettingsRow>
+        <ToggleRow label="Allow Incompatible WebUI" checked={allowIncompatible} onChange={setAllowIncompatible} />
+        <SettingsRow label="Latest WebUI">
+          <ReadonlyValue loading={versionLoading} value={formatComponentVersion(webVersion)} />
+        </SettingsRow>
+        <SettingsRow label="Latest Server">
+          <ReadonlyValue loading={versionLoading} value={formatComponentVersion(serverVersion)} />
+        </SettingsRow>
+        <div className="flex flex-wrap justify-end gap-3 pt-3">
+          <Button variant="secondary" onClick={() => loadVersions(releaseChannel, true)} disabled={versionLoading}>
+            <RefreshCw size={13} className="mr-1.5" />
+            Check
+          </Button>
+          <Button variant="secondary" onClick={handleReportManualUpdate} disabled={Boolean(actionLoading)}>
+            Report Manual Update
+          </Button>
+          <Button onClick={handleUpdateWebUI} disabled={Boolean(actionLoading)}>
+            {actionLoading === 'webui-update' ? 'Updating...' : 'Update WebUI'}
+          </Button>
+        </div>
+      </SettingGroup>
+
+      <SettingGroup title="Themes">
+        <SettingsRow label="Add Theme URL">
+          <TextInput value={themeUrl} onChange={e => setThemeUrl(e.target.value)} placeholder="https://example.com/theme.json" />
+        </SettingsRow>
+        <ToggleRow label="Preview Only" checked={previewTheme} onChange={setPreviewTheme} />
+        <div className="flex justify-end pt-3">
+          <Button onClick={handleAddTheme} disabled={actionLoading === 'add-theme'}>
+            <Link2 size={13} className="mr-1.5" />
+            {actionLoading === 'add-theme' ? 'Loading...' : previewTheme ? 'Preview Theme' : 'Add Theme'}
+          </Button>
+        </div>
+
+        {loading ? (
+          <InlineSpinner />
+        ) : themes.length === 0 ? (
+          <p className="py-2 text-sm text-gray-500">No themes found.</p>
+        ) : (
+          <div className="mt-4 divide-y divide-gray-800/60 rounded-md border border-gray-800/70 bg-gray-950/40">
+            {themes.map(theme => (
+              <div key={theme.ID} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Palette size={14} className="text-blue-400" />
+                    <span className="text-sm font-medium text-gray-100">{theme.Name}</span>
+                    {theme.IsInstalled && <UserBadge color="blue">Installed</UserBadge>}
+                    {theme.IsPreview && <UserBadge color="gray">Preview</UserBadge>}
+                  </div>
+                  <div className="mt-1 text-xs text-gray-500">
+                    {theme.Author} · {formatThemeVersion(theme.Version)} · {theme.ID}
+                  </div>
+                  {theme.Description && <p className="mt-1 text-xs text-gray-400">{theme.Description}</p>}
+                  {(theme.Tags?.length ?? 0) > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {theme.Tags.slice(0, 5).map(tag => <InfoPill key={`${theme.ID}-${tag}`}>{tag}</InfoPill>)}
+                    </div>
+                  )}
+                </div>
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  {theme.URL && (
+                    <Button size="sm" variant="secondary" onClick={() => handleUpdateTheme(theme)} disabled={Boolean(actionLoading)}>
+                      {actionLoading === `update-${theme.ID}` ? 'Updating...' : 'Update'}
+                    </Button>
+                  )}
+                  {theme.IsInstalled && (
+                    <Button size="sm" variant="destructive" onClick={() => handleDeleteTheme(theme)} disabled={Boolean(actionLoading)}>
+                      {actionLoading === `delete-${theme.ID}` ? 'Removing...' : 'Remove'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-3 text-xs text-gray-500">Theme apply is omitted because the server exposes theme install/update/remove, but not a dedicated active-theme field.</p>
+      </SettingGroup>
+    </div>
+  );
+}
+
+function ConfigurationSummarySection({
+  title,
+  description,
+  queries,
+}: {
+  title: string;
+  description: string;
+  queries: string[];
+}) {
+  const [configs, setConfigs] = useState<ConfigurationInfo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [validatingId, setValidatingId] = useState<string | null>(null);
+  const [validationMessages, setValidationMessages] = useState<Record<string, string>>({});
+
+  useEffect(() => { load(); }, [queries.join('|')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const results = await Promise.all(queries.map(query => configurationApi.list(query)));
+      const deduped = new Map<string, ConfigurationInfo>();
+      results.flat().forEach(config => deduped.set(config.ID, config));
+      setConfigs(Array.from(deduped.values()).sort((a, b) => a.Name.localeCompare(b.Name)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load server configuration.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function validateConfig(config: ConfigurationInfo) {
+    setValidatingId(config.ID);
+    setError(null);
+    try {
+      const current = await configurationApi.get(config.ID);
+      const result = await configurationApi.validate(config.ID, current);
+      const validationErrors = Object.values(result.ValidationErrors ?? {}).flat();
+      const messages = Object.values(result.Messages ?? {}).flat();
+      const text = [...validationErrors, ...messages].join(' ');
+      setValidationMessages(prev => ({
+        ...prev,
+        [config.ID]: text || 'Configuration is valid.',
+      }));
+    } catch (err) {
+      setValidationMessages(prev => ({
+        ...prev,
+        [config.ID]: err instanceof Error ? err.message : 'Validation failed.',
+      }));
+    } finally {
+      setValidatingId(null);
+    }
+  }
+
+  return (
+    <div className="space-y-7">
+      <SectionHeader title={title} description={description} />
+      {error && <Alert tone="error">{error}</Alert>}
+      <SettingGroup title="Server Configuration">
+        {loading ? (
+          <InlineSpinner />
+        ) : configs.length === 0 ? (
+          <p className="py-2 text-sm text-gray-500">No matching server configuration is currently registered.</p>
+        ) : (
+          <div className="space-y-3">
+            {configs.map(config => (
+              <div key={config.ID} className="rounded-md border border-gray-800/70 bg-gray-950/40 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-gray-100">{config.Name}</div>
+                    {config.Description && <p className="mt-1 text-xs text-gray-400">{config.Description}</p>}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {config.IsBase && <InfoPill>Base</InfoPill>}
+                      {config.IsHidden && <InfoPill>Hidden</InfoPill>}
+                      {config.HasCustomValidation && <InfoPill>Validation</InfoPill>}
+                      {config.HasLiveEdit && <InfoPill>Live Edit</InfoPill>}
+                      {config.HasCustomActions && <InfoPill>Actions</InfoPill>}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="secondary" disabled={validatingId === config.ID} onClick={() => validateConfig(config)}>
+                    {validatingId === config.ID ? 'Validating...' : 'Validate'}
+                  </Button>
+                </div>
+                <div className="mt-3 grid gap-3 text-xs text-gray-500 sm:grid-cols-2">
+                  <div>
+                    <span className="text-gray-400">Plugin:</span> {config.Plugin?.Name ?? 'Core'}
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Restart pending:</span> {config.RestartPendingFor.length || 0}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <span className="text-gray-400">Environment:</span> {config.LoadedEnvironmentVariables.length > 0 ? config.LoadedEnvironmentVariables.join(', ') : 'None'}
+                  </div>
+                </div>
+                {validationMessages[config.ID] && (
+                  <div className="mt-3 rounded border border-gray-700/60 bg-gray-900/60 px-3 py-2 text-xs text-gray-300">
+                    {validationMessages[config.ID]}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </SettingGroup>
+    </div>
+  );
+}
+
+type EditDraft = {
+  Username: string;
+  IsAdmin: boolean;
+  IsTrkt: boolean;
+  PlexUsernames: string;
+  Avatar: string;
+  RestrictedTags: number[];
+};
 type AddDraft = { Username: string; Password: string; IsAdmin: boolean };
 
 function UserManagementSection() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState<string | null>(null);
+  const [tagFilter, setTagFilter] = useState('');
 
   const [showAdd, setShowAdd] = useState(false);
   const [addDraft, setAddDraft] = useState<AddDraft>({ Username: '', Password: '', IsAdmin: false });
@@ -558,7 +1116,7 @@ function UserManagementSection() {
   const [addSaving, setAddSaving] = useState(false);
 
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editDraft, setEditDraft] = useState<EditDraft>({ Username: '', IsAdmin: false, IsTrkt: false, PlexUsernames: '' });
+  const [editDraft, setEditDraft] = useState<EditDraft>({ Username: '', IsAdmin: false, IsTrkt: false, PlexUsernames: '', Avatar: '', RestrictedTags: [] });
   const [editError, setEditError] = useState<string | null>(null);
   const [editSaving, setEditSaving] = useState(false);
 
@@ -571,7 +1129,10 @@ function UserManagementSection() {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    loadTags();
+  }, []);
 
   async function load() {
     setLoading(true);
@@ -585,6 +1146,19 @@ function UserManagementSection() {
     }
   }
 
+  async function loadTags() {
+    setTagsLoading(true);
+    setTagsError(null);
+    try {
+      const response = await tagsApi.listAniDb();
+      setTags(response.List);
+    } catch (err) {
+      setTagsError(err instanceof Error ? err.message : 'Failed to load tags.');
+    } finally {
+      setTagsLoading(false);
+    }
+  }
+
   function openEdit(user: User) {
     setEditingId(user.ID);
     setEditDraft({
@@ -592,6 +1166,8 @@ function UserManagementSection() {
       IsAdmin: user.IsAdmin,
       IsTrkt: user.CommunitySites.includes('Trakt'),
       PlexUsernames: user.PlexUsernames ?? '',
+      Avatar: user.Avatar ?? '',
+      RestrictedTags: user.RestrictedTags ?? [],
     });
     setEditError(null);
     setPwUserId(null);
@@ -615,6 +1191,8 @@ function UserManagementSection() {
         IsAdmin: editDraft.IsAdmin,
         CommunitySites: editDraft.IsTrkt ? ['Trakt'] : [],
         PlexUsernames: editDraft.PlexUsernames.trim() || undefined,
+        Avatar: editDraft.Avatar,
+        RestrictedTags: editDraft.RestrictedTags,
       };
       const updated = await usersApi.update(editingId!, body);
       setUsers(prev => prev.map(u => u.ID === editingId ? updated : u));
@@ -631,6 +1209,29 @@ function UserManagementSection() {
     setAddDraft({ Username: '', Password: '', IsAdmin: false });
     setAddError(null);
     closeEdit();
+  }
+
+  function handleEditAvatarFile(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setEditDraft(prev => ({ ...prev, Avatar: reader.result as string }));
+      }
+    };
+    reader.onerror = () => setEditError('Failed to read avatar file.');
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  }
+
+  function toggleRestrictedTag(tagId: number, checked: boolean) {
+    setEditDraft(prev => ({
+      ...prev,
+      RestrictedTags: checked
+        ? Array.from(new Set([...prev.RestrictedTags, tagId]))
+        : prev.RestrictedTags.filter(id => id !== tagId),
+    }));
   }
 
   async function handleCreate() {
@@ -692,6 +1293,10 @@ function UserManagementSection() {
     }
   }
 
+  const filteredTags = tags
+    .filter(tag => !tagFilter.trim() || tag.Name.toLowerCase().includes(tagFilter.trim().toLowerCase()))
+    .slice(0, 50);
+
   return (
     <div className="space-y-6">
       <SectionHeader title="User Management" description="Manage DaCollector user accounts — usernames, permissions, Trakt integration, and passwords." />
@@ -747,14 +1352,13 @@ function UserManagementSection() {
           {users.map(user => (
             <div key={user.ID}>
               <div className="flex items-center gap-3 px-5 py-3">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-blue-500/20 text-sm font-semibold text-blue-400">
-                  {user.Username.charAt(0).toUpperCase()}
-                </span>
+                <AvatarPreview user={user} avatar={user.Avatar} size="sm" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium text-gray-100">{user.Username}</span>
                     {user.IsAdmin && <UserBadge color="blue">Admin</UserBadge>}
                     {user.CommunitySites.includes('Trakt') && <UserBadge color="gray">Trakt</UserBadge>}
+                    {(user.RestrictedTags?.length ?? 0) > 0 && <UserBadge color="gray">{user.RestrictedTags.length} Restricted</UserBadge>}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
@@ -811,6 +1415,19 @@ function UserManagementSection() {
                 <div className="border-t border-gray-700/50 bg-gray-900/30 px-5 py-5 space-y-4">
                   {editError && <Alert tone="error">{editError}</Alert>}
                   <div className="space-y-1">
+                    <SettingsRow label="Avatar">
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <AvatarPreview user={user} avatar={editDraft.Avatar} size="sm" />
+                        <label className="inline-flex cursor-pointer items-center justify-center rounded-md border border-gray-600 bg-gray-800/70 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:border-gray-500 hover:text-gray-100">
+                          <ImageIcon size={13} className="mr-1.5" />
+                          Pick
+                          <input type="file" accept="image/*" className="hidden" onChange={handleEditAvatarFile} />
+                        </label>
+                        <Button variant="secondary" size="sm" onClick={() => setEditDraft({ ...editDraft, Avatar: '' })}>
+                          Remove
+                        </Button>
+                      </div>
+                    </SettingsRow>
                     <SettingsRow label="Username">
                       <TextInput
                         value={editDraft.Username}
@@ -834,6 +1451,38 @@ function UserManagementSection() {
                         placeholder="comma-separated"
                       />
                     </SettingsRow>
+                  </div>
+                  <div className="border-t border-gray-700/50 pt-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-400">Tag Restrictions</h3>
+                    {tagsError && <Alert tone="error">{tagsError}</Alert>}
+                    <div className="mt-3 space-y-3">
+                      <TextInput
+                        value={tagFilter}
+                        onChange={e => setTagFilter(e.target.value)}
+                        placeholder="Filter tags"
+                      />
+                      {tagsLoading ? (
+                        <InlineSpinner />
+                      ) : tags.length === 0 ? (
+                        <p className="text-sm text-gray-500">No tags available from the server.</p>
+                      ) : (
+                        <>
+                          <div className="text-xs text-gray-500">{editDraft.RestrictedTags.length} selected</div>
+                          <div className="max-h-52 overflow-y-auto rounded-md border border-gray-800/70 bg-gray-950/40 p-2">
+                            {filteredTags.length === 0 ? (
+                              <p className="px-2 py-1 text-xs text-gray-500">No matching tags.</p>
+                            ) : filteredTags.map(tag => (
+                              <ToggleRow
+                                key={tag.ID}
+                                label={tag.Name}
+                                checked={editDraft.RestrictedTags.includes(tag.ID)}
+                                onChange={checked => toggleRestrictedTag(tag.ID, checked)}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <div className="flex justify-end gap-3">
                     <Button variant="secondary" onClick={closeEdit} disabled={editSaving}>Cancel</Button>
@@ -884,6 +1533,70 @@ function UserBadge({ color, children }: { color: 'blue' | 'gray'; children: Reac
       {children}
     </span>
   );
+}
+
+function AvatarPreview({
+  user,
+  avatar,
+  size,
+}: {
+  user?: User | null;
+  avatar?: string;
+  size: 'sm' | 'lg';
+}) {
+  const classes = size === 'lg'
+    ? 'h-16 w-16 text-xl'
+    : 'h-8 w-8 text-sm';
+  const fallback = user?.Username?.charAt(0).toUpperCase() || 'D';
+  if (avatar) {
+    return (
+      <img
+        src={avatar}
+        alt=""
+        className={`${classes} shrink-0 rounded-full border border-gray-700 object-cover`}
+      />
+    );
+  }
+  return (
+    <span className={`grid ${classes} shrink-0 place-items-center rounded-full bg-blue-500/20 font-semibold text-blue-400`}>
+      {fallback}
+    </span>
+  );
+}
+
+function ReadonlyValue({ loading, value }: { loading: boolean; value: string }) {
+  return (
+    <div className="min-h-[2.375rem] rounded-md border border-gray-800 bg-gray-950/50 px-3 py-2 text-sm text-gray-300">
+      {loading ? 'Checking...' : value}
+    </div>
+  );
+}
+
+function InfoPill({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="rounded border border-gray-700/70 bg-gray-900/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">
+      {children}
+    </span>
+  );
+}
+
+function formatComponentVersion(version: ComponentVersion | null) {
+  if (!version) return 'Unknown';
+  const parts = [
+    version.Version,
+    version.Tag ? `tag ${version.Tag}` : '',
+    version.ReleaseChannel ? String(version.ReleaseChannel) : '',
+    version.ReleaseDate ? new Date(version.ReleaseDate).toLocaleDateString() : '',
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : 'Unknown';
+}
+
+function formatThemeVersion(version: WebUITheme['Version']) {
+  if (!version) return 'unknown version';
+  if (typeof version === 'string') return version;
+  const parts = [version.Major, version.Minor, version.Build]
+    .filter((part): part is number => typeof part === 'number' && part >= 0);
+  return parts.length > 0 ? parts.join('.') : 'unknown version';
 }
 
 function ApiKeysSection({

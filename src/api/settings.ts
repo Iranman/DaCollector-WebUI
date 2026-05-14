@@ -51,6 +51,11 @@ export interface ServerSettings {
     TokenExpirationDate?: string;
     SyncFrequency?: string;
   };
+  CollectionManager?: {
+    ScheduledSyncEnabled?: boolean;
+    SyncIntervalMinutes?: number;
+    Collections?: unknown[];
+  };
   Database?: {
     Type?: string;
   };
