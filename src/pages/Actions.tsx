@@ -4,6 +4,8 @@ import { AlertTriangle, CheckCircle2, Play, ShieldAlert, ShieldCheck } from 'luc
 import { actionsApi } from '../api/actions';
 import { ApiError } from '../api/client';
 import { usersApi, User } from '../api/users';
+import { useConfirm } from '../components/ui/ConfirmProvider';
+import { useToast } from '../components/ui/ToastProvider';
 
 interface ActionDef {
   id: string;
@@ -233,6 +235,8 @@ const ACTION_GROUPS: ActionGroup[] = [
 
 export default function Actions() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { notify } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [running, setRunning] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<Record<string, 'ok' | 'error'>>({});
@@ -254,7 +258,15 @@ export default function Actions() {
       setErrorMessages(result => ({ ...result, [action.id]: 'Admin permission required.' }));
       return;
     }
-    if (action.confirmation && !window.confirm(action.confirmation)) return;
+    if (action.confirmation) {
+      const confirmed = await confirm({
+        confirmLabel: action.destructive ? 'Run Action' : 'Continue',
+        message: action.confirmation,
+        title: action.destructive ? 'Confirm Admin Action' : 'Confirm Action',
+        tone: action.destructive ? 'danger' : 'default',
+      });
+      if (!confirmed) return;
+    }
 
     setRunning(result => ({ ...result, [action.id]: true }));
     setResults(result => {
@@ -270,13 +282,16 @@ export default function Actions() {
     try {
       await action.fn();
       setResults(result => ({ ...result, [action.id]: 'ok' }));
+      notify({ message: `${action.label} was queued.`, tone: 'success' });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         navigate('/login');
         return;
       }
       setResults(result => ({ ...result, [action.id]: 'error' }));
-      setErrorMessages(result => ({ ...result, [action.id]: err instanceof Error ? err.message : 'Action failed.' }));
+      const message = err instanceof Error ? err.message : 'Action failed.';
+      setErrorMessages(result => ({ ...result, [action.id]: message }));
+      notify({ message, title: action.label, tone: 'error' });
     } finally {
       setRunning(result => ({ ...result, [action.id]: false }));
     }

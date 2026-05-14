@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
+  AlertTriangle,
   Bell,
+  DownloadCloud,
   Settings,
   LogOut,
   LayoutDashboard,
@@ -20,9 +22,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { clearApiKey } from '../api/client';
-import { queueApi, QueueStatus } from '../api/queue';
-import { usersApi, User } from '../api/users';
-import { buildConnection } from '../lib/signalr';
+import { useLiveState } from '../lib/liveState';
 import BrandMark from './BrandMark';
 
 interface NavItem {
@@ -39,7 +39,6 @@ interface NavGroup {
 
 const primaryNav: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-  { to: '/utilities', label: 'Utilities', Icon: Wrench },
   { to: '/log', label: 'Log', Icon: ScrollText },
   { to: '/actions', label: 'Actions', Icon: Zap },
   { to: '/plugins', label: 'Plugins', Icon: Plug },
@@ -57,9 +56,25 @@ const collectionNav: NavGroup = {
   ],
 };
 
+const utilityNav: NavGroup = {
+  label: 'Utilities',
+  Icon: Wrench,
+  items: [
+    { to: '/utilities', label: 'Queue', Icon: Bell },
+    { to: '/utilities/unrecognized/files', label: 'Unmatched Files', Icon: FolderSearch },
+    { to: '/utilities/release-management/duplicates', label: 'Duplicates', Icon: Library },
+    { to: '/utilities/release-management/missing', label: 'Missing', Icon: ScrollText },
+    { to: '/utilities/integrity', label: 'Integrity', Icon: Zap },
+    { to: '/utilities/renamer', label: 'Rename/Move', Icon: FolderOpen },
+    { to: '/utilities/file-search', label: 'Parser', Icon: ScanLine },
+    { to: '/utilities/folders', label: 'Folders', Icon: FolderOpen },
+  ],
+};
+
 const mobileNav: Array<NavItem | NavGroup> = [
   primaryNav[0],
   collectionNav,
+  utilityNav,
   ...primaryNav.slice(1),
 ];
 
@@ -67,47 +82,7 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [queue, setQueue] = useState<QueueStatus | null>(null);
-
-  useEffect(() => {
-    let stopped = false;
-
-    usersApi.current()
-      .then(user => { if (!stopped) setCurrentUser(user); })
-      .catch(() => { if (!stopped) setCurrentUser(null); });
-
-    return () => { stopped = true; };
-  }, []);
-
-  useEffect(() => {
-    let stopped = false;
-
-    queueApi.get()
-      .then(status => { if (!stopped) setQueue(status); })
-      .catch(() => undefined);
-
-    const conn = buildConnection('/signalr/aggregate');
-
-    function applyQueue(status: QueueStatus) {
-      if (!stopped) setQueue(status);
-    }
-
-    conn.on('queue:connected', applyQueue);
-    conn.on('queue:state.changed', applyQueue);
-    conn.onreconnected(() => {
-      conn.invoke('feed.join_single', 'queue').catch(() => undefined);
-    });
-
-    conn.start()
-      .then(() => conn.invoke('feed.join_single', 'queue'))
-      .catch(() => undefined);
-
-    return () => {
-      stopped = true;
-      conn.stop();
-    };
-  }, []);
+  const { currentUser, error, queue, readinessWarnings, status, updateState } = useLiveState();
 
   function handleLogout() {
     clearApiKey();
@@ -121,25 +96,54 @@ export default function Layout() {
   const queueCount = queue?.TotalCount ?? 0;
   const username = currentUser?.Username ?? 'User';
   const userInitial = username.trim().charAt(0).toUpperCase() || 'U';
+  const warningCount = readinessWarnings.length + (error ? 1 : 0) + (status?.State && status.State !== 'Started' ? 1 : 0);
+  const updateCount = Number(updateState.serverAvailable) + Number(updateState.webuiAvailable);
 
   return (
-    <div className="min-h-screen text-gray-100">
+    <div className="min-h-screen overflow-x-hidden text-gray-100">
       <header className="fixed inset-x-0 top-0 z-40 border-b border-shoko-line bg-[#050505]/92 backdrop-blur-sm">
-        <div className="flex h-14 items-center px-4 sm:px-6">
-          <NavLink to="/dashboard" onClick={closeMobile} className="flex min-w-0 items-center gap-3 pr-5 lg:pr-10">
+        <div className="flex h-14 items-center px-3 sm:px-6">
+          <NavLink to="/dashboard" onClick={closeMobile} className="flex min-w-0 items-center gap-2 pr-3 sm:gap-3 sm:pr-5 lg:pr-10">
             <BrandMark />
-            <span className="truncate text-lg font-semibold tracking-wide text-white">DaCollector</span>
+            <span className="hidden truncate text-lg font-semibold tracking-wide text-white sm:block">DaCollector</span>
           </NavLink>
 
           <nav className="hidden items-center gap-6 lg:flex">
             <DesktopLink item={primaryNav[0]} />
             <DesktopGroup group={collectionNav} active={collectionNav.items.some(item => location.pathname.startsWith(item.to))} />
+            <DesktopGroup group={utilityNav} active={location.pathname.startsWith('/utilities')} />
             {primaryNav.slice(1).map(item => (
               <DesktopLink key={item.to} item={item} />
             ))}
           </nav>
 
-          <div className="ml-auto flex items-center gap-3 sm:gap-4">
+          <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-4">
+            {warningCount > 0 && (
+              <NavLink
+                to="/dashboard"
+                title={`${warningCount} readiness warning${warningCount === 1 ? '' : 's'}`}
+                className="relative hidden items-center text-yellow-400 transition-colors hover:text-yellow-300 sm:flex"
+              >
+                <AlertTriangle size={18} />
+                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-yellow-500 px-1 text-[10px] font-semibold leading-none text-black">
+                  {warningCount > 9 ? '9+' : warningCount}
+                </span>
+              </NavLink>
+            )}
+
+            {updateCount > 0 && (
+              <NavLink
+                to="/settings/web-ui"
+                title={`${updateCount} update${updateCount === 1 ? '' : 's'} available`}
+                className="relative hidden items-center text-blue-500 transition-colors hover:text-blue-400 sm:flex"
+              >
+                <DownloadCloud size={18} />
+                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-black">
+                  {updateCount}
+                </span>
+              </NavLink>
+            )}
+
             <NavLink
               to="/utilities"
               title={queueCount > 0 ? `${queueCount} queued job${queueCount === 1 ? '' : 's'}` : 'Queue'}
@@ -168,7 +172,7 @@ export default function Layout() {
               to="/settings"
               title="Settings"
               className={({ isActive }) =>
-                `transition-colors ${isActive ? 'text-blue-500' : 'text-gray-400 hover:text-gray-200'}`
+                `hidden transition-colors lg:inline-flex ${isActive ? 'text-blue-500' : 'text-gray-400 hover:text-gray-200'}`
               }
             >
               <Settings size={18} />
@@ -178,7 +182,7 @@ export default function Layout() {
               type="button"
               onClick={handleLogout}
               title="Logout"
-              className="text-gray-400 transition-colors hover:text-gray-200"
+              className="hidden text-gray-400 transition-colors hover:text-gray-200 lg:inline-flex"
             >
               <LogOut size={18} />
             </button>
@@ -186,7 +190,7 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => setMobileOpen(open => !open)}
-              className="rounded-md border border-gray-700/50 p-1.5 text-gray-400 transition-colors hover:text-gray-200 lg:hidden"
+              className="fixed left-14 top-3 z-50 rounded-md border border-blue-500/60 bg-black/80 p-1.5 text-blue-500 transition-colors hover:text-blue-400 lg:hidden"
               aria-expanded={mobileOpen}
               aria-label="Toggle navigation"
             >
@@ -225,12 +229,24 @@ export default function Layout() {
                   ? <MobileGroup key={item.label} group={item} currentPath={location.pathname} onNavigate={closeMobile} />
                   : <MobileLink key={item.to} item={item} onNavigate={closeMobile} />
               ))}
+
+              <div className="border-t border-gray-800/70 pt-3">
+                <MobileLink item={{ to: '/settings', label: 'Settings', Icon: Settings }} onNavigate={closeMobile} />
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="mt-1 flex w-full items-center gap-2 border-l-2 border-transparent px-3 py-2 text-sm text-gray-400 transition-colors hover:text-gray-200"
+                >
+                  <LogOut size={15} />
+                  Logout
+                </button>
+              </div>
             </div>
           </nav>
         )}
       </header>
 
-      <main className="min-h-screen pt-14">
+      <main className="min-h-screen min-w-0 overflow-x-hidden pt-14">
         <Outlet />
       </main>
     </div>

@@ -9,7 +9,7 @@ import TextInput from '../components/ui/TextInput';
 
 type Step = 'credentials' | 'waiting';
 
-export default function Setup() {
+export default function Setup({ onAuthenticated }: { onAuthenticated: () => void }) {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>('credentials');
   const [username, setUsername] = useState('');
@@ -52,6 +52,7 @@ export default function Setup() {
           clearInterval(pollRef.current!);
           const resp = await authApi.login({ user: username, pass: password, device: 'WebUI' });
           setApiKey(resp.apikey);
+          onAuthenticated();
           navigate('/dashboard');
         } else if (status.State === 'Failed') {
           clearInterval(pollRef.current!);
@@ -75,10 +76,14 @@ export default function Setup() {
   if (step === 'waiting') {
     return (
       <div className="flex min-h-screen items-center justify-center px-6 text-gray-100">
-        <div className="app-surface w-full max-w-sm rounded-md p-8 text-center">
+        <div className="app-surface w-full max-w-lg rounded-md p-8 text-center">
           <BrandHeader subtitle="Starting DaCollector" />
+          <SetupProgress current="startup" />
           <div className="mx-auto mt-8 h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
           <p className="mt-5 text-sm text-gray-300">{statusMsg}</p>
+          <p className="mt-2 text-xs text-gray-500">
+            Provider, managed-folder, Plex, and data-collection readiness continue on the Dashboard after authentication.
+          </p>
           {error && <p className="text-red-400 text-sm">{error}</p>}
         </div>
       </div>
@@ -87,8 +92,9 @@ export default function Setup() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-6 text-gray-100">
-      <div className="app-surface w-full max-w-sm rounded-md p-8">
+      <div className="app-surface w-full max-w-lg rounded-md p-8">
         <BrandHeader subtitle="Create your administrator account to get started." />
+        <SetupProgress current="account" />
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Username</label>
@@ -128,6 +134,38 @@ export default function Setup() {
           </Button>
         </form>
       </div>
+    </div>
+  );
+}
+
+function SetupProgress({ current }: { current: 'account' | 'startup' }) {
+  const steps = [
+    { key: 'account', label: 'Admin account' },
+    { key: 'startup', label: 'Start server' },
+    { key: 'readiness', label: 'Readiness review' },
+  ];
+
+  return (
+    <div className="mb-8 grid gap-2 text-left sm:grid-cols-3">
+      {steps.map((item, index) => {
+        const active = item.key === current;
+        const done = current === 'startup' && index === 0;
+        return (
+          <div
+            key={item.key}
+            className={`rounded-md border px-3 py-2 text-xs ${
+              active
+                ? 'border-blue-500/70 bg-blue-600/20 text-white'
+                : done
+                  ? 'border-emerald-500/50 bg-emerald-600/10 text-emerald-300'
+                  : 'border-gray-800 bg-black/20 text-gray-500'
+            }`}
+          >
+            <div className="font-semibold">{item.label}</div>
+            <div className="mt-0.5">{done ? 'Complete' : active ? 'Current' : 'Next'}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }

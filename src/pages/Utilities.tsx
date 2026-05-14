@@ -18,12 +18,16 @@ import {
 import { queueApi, QueueItem, QueueStatus } from '../api/queue';
 import { ApiError } from '../api/client';
 import { buildConnection } from '../lib/signalr';
+import { useConfirm } from '../components/ui/ConfirmProvider';
+import { useToast } from '../components/ui/ToastProvider';
 
 type ConnState = 'connecting' | 'live' | 'reconnecting' | 'offline';
 type QueueSection = 'running' | 'waiting' | 'blocked';
 
 export default function Utilities() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { notify } = useToast();
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [items, setItems] = useState<QueueItem[]>([]);
   const [types, setTypes] = useState<Record<string, number>>({});
@@ -137,15 +141,25 @@ export default function Utilities() {
   }
 
   async function handleAction(id: string, label: string, fn: () => Promise<void>, confirmMessage?: string) {
-    if (confirmMessage && !window.confirm(confirmMessage)) return;
+    if (confirmMessage && !await confirm({
+      confirmLabel: label,
+      message: confirmMessage,
+      title: `${label} Queue`,
+      tone: label === 'Clear' ? 'danger' : 'warning',
+    })) return;
     setActionPending(id);
     try {
       await fn();
       await handleRefresh();
       setError(null);
+      notify({ message: `${label} completed.`, tone: 'success' });
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) navigate('/login');
-      else setError(err instanceof Error ? err.message : `${label} failed.`);
+      else {
+        const message = err instanceof Error ? err.message : `${label} failed.`;
+        setError(message);
+        notify({ message, title: `${label} failed`, tone: 'error' });
+      }
     } finally {
       setActionPending(null);
     }

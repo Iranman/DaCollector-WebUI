@@ -19,11 +19,15 @@ import {
 } from '../api/plugins';
 import { ApiError } from '../api/client';
 import { usersApi, User } from '../api/users';
+import { useConfirm } from '../components/ui/ConfirmProvider';
+import { useToast } from '../components/ui/ToastProvider';
 
 type Tab = 'plugins' | 'packages' | 'repositories';
 
 export default function Plugins() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { notify } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [tab, setTab] = useState<Tab>('plugins');
   const [pluginSearch, setPluginSearch] = useState('');
@@ -105,13 +109,19 @@ export default function Plugins() {
   async function setPluginEnabled(plugin: PluginInfo, enabled: boolean) {
     if (!currentUser?.IsAdmin) return;
     const verb = enabled ? 'enable' : 'disable';
-    if (!window.confirm(`${verb[0].toUpperCase()}${verb.slice(1)} ${plugin.Name}? A restart may be required.`)) return;
+    if (!await confirm({
+      confirmLabel: enabled ? 'Enable' : 'Disable',
+      message: `${verb[0].toUpperCase()}${verb.slice(1)} ${plugin.Name}? A restart may be required.`,
+      title: `${enabled ? 'Enable' : 'Disable'} Plugin`,
+      tone: 'warning',
+    })) return;
     setBusy(`${verb}-${plugin.ID}`);
     setError(null);
     try {
       const updated = await pluginsApi.setEnabled(plugin.ID, enabled);
       setPlugins(items => items.map(item => item.ID === updated.ID ? updated : item));
       setMessage(`${plugin.Name} ${enabled ? 'enabled' : 'disabled'}.`);
+      notify({ message: `${plugin.Name} ${enabled ? 'enabled' : 'disabled'}.`, tone: 'success' });
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to ${verb} plugin.`);
     } finally {
@@ -121,13 +131,19 @@ export default function Plugins() {
 
   async function uninstallPlugin(plugin: PluginInfo) {
     if (!currentUser?.IsAdmin || !plugin.CanUninstall) return;
-    if (!window.confirm(`Uninstall ${plugin.Name} and purge its configuration?`)) return;
+    if (!await confirm({
+      confirmLabel: 'Uninstall',
+      message: `Uninstall ${plugin.Name} and purge its configuration?`,
+      title: 'Uninstall Plugin',
+      tone: 'danger',
+    })) return;
     setBusy(`uninstall-${plugin.ID}`);
     setError(null);
     try {
       await pluginsApi.uninstall(plugin.ID, true);
       await refreshPlugins();
       setMessage(`${plugin.Name} uninstalled.`);
+      notify({ message: `${plugin.Name} uninstalled.`, tone: 'success' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to uninstall plugin.');
     } finally {
@@ -137,7 +153,11 @@ export default function Plugins() {
 
   async function installPackage(pkg: PackageInfo) {
     if (!currentUser?.IsAdmin) return;
-    if (!window.confirm(`Install ${pkg.Manifest.Name} ${formatVersion(pkg.Release.Version)} for ${pkg.Archive.RuntimeIdentifier}?`)) return;
+    if (!await confirm({
+      confirmLabel: 'Install',
+      message: `Install ${pkg.Manifest.Name} ${formatVersion(pkg.Release.Version)} for ${pkg.Archive.RuntimeIdentifier}?`,
+      title: 'Install Plugin Package',
+    })) return;
     setBusy(`install-${pkg.Manifest.PackageID}-${formatVersion(pkg.Release.Version)}-${pkg.Archive.RuntimeIdentifier}`);
     setError(null);
     try {
@@ -149,6 +169,7 @@ export default function Plugins() {
       );
       await Promise.all([refreshPlugins(), refreshPackages(false)]);
       setMessage(`${plugin.Name} installed.`);
+      notify({ message: `${plugin.Name} installed.`, tone: 'success' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to install package.');
     } finally {
@@ -173,12 +194,18 @@ export default function Plugins() {
 
   async function scheduleUpdateCheck(performUpgrade: boolean) {
     if (!currentUser?.IsAdmin) return;
-    if (performUpgrade && !window.confirm('Schedule plugin update checks and perform upgrades for enabled plugins?')) return;
+    if (performUpgrade && !await confirm({
+      confirmLabel: 'Schedule Upgrades',
+      message: 'Schedule plugin update checks and perform upgrades for enabled plugins?',
+      title: 'Schedule Plugin Upgrades',
+      tone: 'warning',
+    })) return;
     setBusy(performUpgrade ? 'upgrade-check' : 'update-check');
     setError(null);
     try {
       await pluginsApi.scheduleUpdateCheck(true, performUpgrade);
       setMessage(performUpgrade ? 'Plugin update and upgrade check scheduled.' : 'Plugin update check scheduled.');
+      notify({ message: performUpgrade ? 'Plugin update and upgrade check scheduled.' : 'Plugin update check scheduled.', tone: 'success' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to schedule plugin update check.');
     } finally {

@@ -26,9 +26,9 @@ Note: upstream Shoko-WebUI may move faster than this repo and currently uses a l
 ## Shoko Design Reference
 
 ### Visual Identity
-- **Background**: Full-screen dark image/gradient behind everything. Shoko uses anime character artwork. We use a CSS gradient that evokes this: a very dark navy-to-charcoal gradient (`#0d0d1a` → `#1a1a2e`). Apply it to `body` / the root container. Panels sit on top with semi-transparency.
-- **Panel backgrounds**: `rgba(13, 13, 26, 0.85)` or `bg-[#0d0d1a]/85` — dark, slightly transparent so a background image could show through.
-- **Accent color**: Bright blue — `#3b82f6` (Tailwind `blue-500`). Used for active nav, primary buttons, enabled toggles.
+- **Background**: Full-screen dark image/gradient behind everything. Shoko uses anime character artwork. DaCollector uses the supplied black-and-gold brand mark, so the background should stay near-black with subtle gold light and enough depth for translucent panels.
+- **Panel backgrounds**: near-black, slightly transparent panels such as `bg-shoko-panel/85` or `bg-black/85` so the brand background can show through.
+- **Accent color**: Metallic gold. The current Tailwind `blue-*` palette is intentionally remapped in `tailwind.config.js` to gold tones so older Shoko-parity class names still render as black/gold. Do not restore Shoko's blue accent unless the user explicitly changes the brand direction.
 - **Destructive color**: `#ef4444` (Tailwind `red-500`). Delete and Unlink buttons.
 - **Text hierarchy**:
   - Primary: `text-white` / `text-gray-100`
@@ -55,13 +55,13 @@ Note: upstream Shoko-WebUI may move faster than this repo and currently uses a l
 ```
 
 - Background: `bg-[#0d0d1a]/90 backdrop-blur-sm border-b border-gray-700/50`
-- **Left**: App logo (a small rounded avatar/icon, 32px, blue background with "D" initial or app icon) + app name text `"DaCollector"` in white, `font-semibold`
+- **Left**: Use `src/components/BrandMark.tsx` and `public/dacollector-logo.png` for the app logo. Do not replace it with a `"D"` initial badge. Keep app name text `"DaCollector"` in white, `font-semibold`.
 - **Center-left nav items**: `Dashboard`, `Collection`, `Utilities`, `Log`, `Actions`
   - Each is a `NavLink`. Active state: no underline, just slightly brighter text (`text-white`) with no background highlight — Shoko uses plain text nav items, active one is just white/brighter.
   - Inactive: `text-gray-400 hover:text-gray-200`
   - Spacing: `gap-6` between items, `text-sm font-medium`
 - **Right controls** (flex row, `gap-4`, `items-center`):
-  - Notification badge: bell icon + blue badge number derived from real queue/status data; hide the badge when there is no count to show.
+  - Notification badge: bell icon + gold badge number derived from real queue/status data; hide the badge when there is no count to show.
   - User avatar: small circle with first letter of the authenticated username + username text from `/api/v3/User/Current`, `text-sm text-gray-300`
   - Settings gear icon: links to `/settings`
   - Logout icon (arrow-right-from-bracket / power icon): calls `clearApiKey()` and navigates to `/login`
@@ -101,7 +101,7 @@ This is the most important page to get right. Shoko's Settings is a **floating t
 - The panel pair sits centered on the page, `max-w-5xl`, `mx-auto`, with top margin `mt-8` or `my-8`
 - Left nav panel: `w-52 shrink-0`, dark panel background, no border-radius (sharp), border-right `border-gray-700/50`
 - Right content panel: `flex-1`, dark panel background, `p-8`
-- Left nav items: `text-sm text-gray-400 hover:text-gray-200 cursor-pointer px-6 py-2.5`. Active item: `text-white bg-blue-600/20 border-l-2 border-blue-500`
+- Left nav items: `text-sm text-gray-400 hover:text-gray-200 cursor-pointer px-6 py-2.5`. Active item should read as gold-accented in the rendered UI. Existing `blue-*` utility classes are acceptable because the local Tailwind palette maps them to gold.
 - Panel container: `flex bg-[#0d0d1a]/90 border border-gray-700/50`
 
 ### Settings Sections (left nav items → right content):
@@ -159,13 +159,13 @@ This is the most important page to get right. Shoko's Settings is a **floating t
   - "Token valid until" — read-only date display
   - "Sync Frequency" dropdown (options: Every 6 Hours, Every 12 Hours, Every 24 Hours, Every 48 Hours)
 - **Plex Options**:
-  - "Authenticate" button (blue/primary)
+  - "Authenticate" button (gold/primary)
   - "Server" dropdown (`--Select Server--`)
 - Cancel + Save buttons at bottom
 
 #### 7. User Management
 - **Current Users** — list of users (username + edit icon + delete icon)
-  - Edit icon: pencil/edit (blue)
+  - Edit icon: pencil/edit (gold)
   - Delete icon: circle-minus (red)
 - **User Options** (shown for selected user):
   - "Pick Avatar" button
@@ -184,7 +184,7 @@ This is the most important page to get right. Shoko's Settings is a **floating t
 #### 8. API Keys
 - **Generate API Key**:
   - Text input: placeholder "Type a name for your new API key"
-  - "Generate" button (blue)
+  - "Generate" button (gold)
 - **Issued API Keys** — list of existing keys:
   - Key name (left)
   - "Delete" button (red, right)
@@ -208,7 +208,7 @@ Create `src/components/ui/` with these reusable components:
 ### `Toggle.tsx`
 Shoko's toggle is NOT a sliding pill — it's a **circle icon**:
 - OFF state: hollow circle outline (`○`), `text-gray-500` / `border-gray-500`
-- ON state: circle with checkmark fill (✓ inside circle), `text-blue-500`
+- ON state: circle with checkmark fill (✓ inside circle), gold accent color. Existing `text-blue-500` is acceptable only because the Tailwind blue palette is locally remapped to gold.
 - Use SVG or Unicode: off = `◯` (U+25EF), on = use a filled checkmark circle SVG
 
 ```tsx
@@ -232,7 +232,7 @@ A row with label on the left, control on the right:
 ### `Button.tsx`
 ```tsx
 // Props: variant: 'primary' | 'destructive' | 'secondary', size?: 'sm' | 'md'
-// primary: bg-blue-600 hover:bg-blue-500 text-white
+// primary: gold-accented button; existing bg-blue-* classes render gold through the local Tailwind palette
 // destructive: bg-red-600 hover:bg-red-500 text-white
 // secondary: bg-transparent border border-gray-600 text-gray-300 hover:border-gray-400
 ```
@@ -241,6 +241,7 @@ A row with label on the left, control on the right:
 ```tsx
 // Dark themed input: bg-gray-800/60 border border-gray-700 rounded-md text-sm text-gray-100
 // focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500
+// The local blue palette renders as gold. Keep focus visible and brand-consistent.
 // px-3 py-2
 ```
 
@@ -259,7 +260,7 @@ Layout:
 - App logo + name at top of card
 - "Create your administrator account to get started" subtitle
 - Form fields: Username, Password, Confirm Password
-- "Create Account" button (primary blue, full width)
+- "Create Account" button (primary gold, full width)
 - After submit: poll server, show spinner + status message
 
 The existing logic in `Setup.tsx` is correct — only restyle it.

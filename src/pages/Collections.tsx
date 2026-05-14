@@ -31,9 +31,11 @@ import {
 import { dacollectorStatusApi, PlexTargetConnectionStatus } from '../api/dacollectorStatus';
 import { ApiError } from '../api/client';
 import Button from '../components/ui/Button';
+import { useConfirm } from '../components/ui/ConfirmProvider';
 import Select from '../components/ui/Select';
 import TextInput from '../components/ui/TextInput';
 import Toggle from '../components/ui/Toggle';
+import { useToast } from '../components/ui/ToastProvider';
 
 interface CollectionRuleDraft {
   DraftID: string;
@@ -102,6 +104,8 @@ function emptyDraft(builders: CollectionBuilderDescriptor[]): CollectionDraft {
 
 export default function Collections() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { notify } = useToast();
   const [collections, setCollections] = useState<CollectionSummary[]>([]);
   const [builders, setBuilders] = useState<CollectionBuilderDescriptor[]>([]);
   const [plexStatus, setPlexStatus] = useState<PlexTargetConnectionStatus | null>(null);
@@ -194,7 +198,13 @@ export default function Collections() {
       `Dry run: ${lastDryRun.AddedItemCount} add, ${lastDryRun.RemovedItemCount} remove, ${lastDryRun.MissingItemCount} missing.`,
       'Continue?',
     ].join('\n');
-    if (!window.confirm(message)) return;
+    const confirmed = await confirm({
+      confirmLabel: 'Apply Sync',
+      message,
+      title: 'Apply Collection Sync',
+      tone: 'warning',
+    });
+    if (!confirmed) return;
 
     setApplying(collection.ID);
     setError(null);
@@ -205,9 +215,12 @@ export default function Collections() {
       setLastDryRun(null);
       setPreview(null);
       setNotice(`Apply finished for ${result.Collection.Name}.`);
+      notify({ message: `Apply finished for ${result.Collection.Name}.`, tone: 'success' });
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Apply failed.');
+      const messageText = err instanceof Error ? err.message : 'Apply failed.';
+      setError(messageText);
+      notify({ message: messageText, title: 'Collection apply failed', tone: 'error' });
     } finally {
       setApplying(null);
     }

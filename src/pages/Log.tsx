@@ -13,6 +13,8 @@ import {
 import { loggingApi, LogEntry, LogFile, LogReadOptions } from '../api/logging';
 import { ApiError } from '../api/client';
 import { buildConnection } from '../lib/signalr';
+import { useConfirm } from '../components/ui/ConfirmProvider';
+import { useToast } from '../components/ui/ToastProvider';
 
 const MAX_ENTRIES = 500;
 const SAVED_FILTERS_KEY = 'dacollector_log_filters';
@@ -60,6 +62,8 @@ const emptyFilters: Filters = {
 
 export default function Log() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { notify } = useToast();
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [files, setFiles] = useState<LogFile[]>([]);
   const [selectedFileID, setSelectedFileID] = useState<string>('current');
@@ -191,6 +195,7 @@ export default function Log() {
     const text = entries.map(entry => formatEntry(entry)).join('\n');
     await navigator.clipboard.writeText(text);
     setMessage(`Copied ${entries.length} visible log entries.`);
+    notify({ message: `Copied ${entries.length} visible log entries.`, tone: 'success' });
   }
 
   async function downloadSelected(format: 'simple' | 'full' | 'json' = 'full') {
@@ -212,6 +217,7 @@ export default function Log() {
       link.remove();
       URL.revokeObjectURL(url);
       setMessage('Log download started.');
+      notify({ message: 'Log download started.', tone: 'success' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to download log.');
     }
@@ -219,7 +225,12 @@ export default function Log() {
 
   async function deleteSelectedFile() {
     if (!selectedFile || selectedFile.IsCurrent) return;
-    if (!window.confirm(`Delete log file ${selectedFile.Name}? This cannot be undone.`)) return;
+    if (!await confirm({
+      confirmLabel: 'Delete Log',
+      message: `Delete log file ${selectedFile.Name}? This cannot be undone.`,
+      title: 'Delete Log File',
+      tone: 'danger',
+    })) return;
     try {
       await loggingApi.deleteFile(selectedFile.ID);
       const nextFiles = await loggingApi.listFiles();
@@ -227,6 +238,7 @@ export default function Log() {
       const current = nextFiles.find(file => file.IsCurrent);
       setSelectedFileID(current?.ID ?? 'current');
       setMessage(`Deleted ${selectedFile.Name}.`);
+      notify({ message: `Deleted ${selectedFile.Name}.`, tone: 'success' });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete log file.');
     }

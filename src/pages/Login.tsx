@@ -6,7 +6,7 @@ import BrandMark from '../components/BrandMark';
 import Button from '../components/ui/Button';
 import TextInput from '../components/ui/TextInput';
 
-export default function Login() {
+export default function Login({ onAuthenticated }: { onAuthenticated: () => void }) {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -20,6 +20,7 @@ export default function Login() {
     try {
       const resp = await authApi.login({ user: username, pass: password, device: 'WebUI' });
       setApiKey(resp.apikey);
+      onAuthenticated();
       navigate('/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login failed.');

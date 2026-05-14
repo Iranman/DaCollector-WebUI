@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, RefreshCw, Wifi, WifiOff, XCircle } from 'lucide-react';
-import { initApi, ServerStatus } from '../api/init';
+import { ServerStatus } from '../api/init';
 import { api, ApiError } from '../api/client';
 import { QueueStatus } from '../api/queue';
 import { managedFoldersApi } from '../api/managedFolders';
 import {
-  dacollectorStatusApi,
   DaCollectorStatus,
   ProviderConnectionStatus,
   PlexTargetConnectionStatus,
   ServerCapabilityStatus,
 } from '../api/dacollectorStatus';
-import { buildConnection } from '../lib/signalr';
+import { useLiveState } from '../lib/liveState';
 
 interface CollectionStats {
   FileCount: number;
@@ -38,6 +37,34 @@ interface WarningItem {
   to?: string;
 }
 
+type DashboardPanelId =
+  | 'summary'
+  | 'warnings'
+  | 'queue-plex'
+  | 'providers'
+  | 'collection-health'
+  | 'capabilities';
+
+const dashboardPanelLabels: Record<DashboardPanelId, string> = {
+  summary: 'Summary cards',
+  warnings: 'Readiness warnings',
+  'queue-plex': 'Queue and Plex target',
+  providers: 'Providers and collections',
+  'collection-health': 'Collection health',
+  capabilities: 'Server capabilities',
+};
+
+const defaultDashboardPanelOrder: DashboardPanelId[] = [
+  'summary',
+  'warnings',
+  'queue-plex',
+  'providers',
+  'collection-health',
+  'capabilities',
+];
+
+const dashboardPrefsKey = 'dacollector_dashboard_panels';
+
 function fmtBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -47,80 +74,36 @@ function fmtBytes(bytes: number): string {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [status, setStatus] = useState<ServerStatus | null>(null);
-  const [readiness, setReadiness] = useState<DaCollectorStatus | null>(null);
+  const {
+    error: liveError,
+    queue,
+    queueConnection,
+    readiness,
+    refresh,
+    status,
+    versions,
+  } = useLiveState();
   const [stats, setStats] = useState<CollectionStats | null>(null);
-  const [version, setVersion] = useState<string | null>(null);
-  const [webuiVersion, setWebuiVersion] = useState<string | null>(null);
   const [managedFolderCount, setManagedFolderCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [readinessError, setReadinessError] = useState<string | null>(null);
-  const [queue, setQueue] = useState<QueueStatus | null>(null);
-  const [queueConn, setQueueConn] = useState<'connecting' | 'live' | 'offline'>('connecting');
-
-  useEffect(() => {
-    let stopped = false;
-    const conn = buildConnection('/signalr/aggregate');
-
-    function applyQueue(state: QueueStatus) {
-      if (!stopped) setQueue(state);
-    }
-
-    conn.on('queue:connected', applyQueue);
-    conn.on('queue:state.changed', applyQueue);
-    conn.onreconnected(() => {
-      if (!stopped) {
-        setQueueConn('live');
-        conn.invoke('feed.join_single', 'queue').catch(() => {});
-      }
-    });
-    conn.onclose(() => { if (!stopped) setQueueConn('offline'); });
-
-    conn.start()
-      .then(() => {
-        if (stopped) return;
-        setQueueConn('live');
-        return conn.invoke('feed.join_single', 'queue');
-      })
-      .catch(() => { if (!stopped) setQueueConn('offline'); });
-
-    return () => {
-      stopped = true;
-      conn.stop();
-    };
-  }, []);
+  const [panelSettingsOpen, setPanelSettingsOpen] = useState(false);
+  const [panelOrder, setPanelOrder] = useState<DashboardPanelId[]>(() => loadDashboardPrefs().order);
+  const [panelVisibility, setPanelVisibility] = useState<Record<DashboardPanelId, boolean>>(() => loadDashboardPrefs().visibility);
 
   useEffect(() => {
     let stopped = false;
 
     async function load() {
+      if (status?.State !== 'Started') return;
+
       try {
-        const [s, v] = await Promise.all([
-          initApi.getStatus(),
-          initApi.getVersion(),
-        ]);
-        if (stopped) return;
-        setStatus(s);
-        setVersion(v.Server.Version ?? null);
-        setWebuiVersion(v.WebUI?.Version ?? null);
-
-        if (s.State !== 'Started') return;
-
-        const [statsResult, readinessResult, foldersResult] = await Promise.allSettled([
+        const [statsResult, foldersResult] = await Promise.allSettled([
           api.get<CollectionStats>('/api/v3/Dashboard/Stats'),
-          dacollectorStatusApi.get(),
           managedFoldersApi.list(),
         ]);
         if (stopped) return;
 
         if (statsResult.status === 'fulfilled') setStats(statsResult.value);
-
-        if (readinessResult.status === 'fulfilled') {
-          setReadiness(readinessResult.value);
-          setReadinessError(null);
-        } else {
-          handleOptionalError(readinessResult.reason, 'Failed to load DaCollector readiness.');
-        }
 
         if (foldersResult.status === 'fulfilled') {
           setManagedFolderCount(foldersResult.value.length);
@@ -137,78 +120,81 @@ export default function Dashboard() {
       }
     }
 
-    function handleOptionalError(err: unknown, fallback: string) {
-      if (err instanceof ApiError && err.status === 401) {
-        navigate('/login');
-        return;
-      }
-      setReadinessError(err instanceof Error ? err.message : fallback);
-    }
-
     load();
 
     return () => { stopped = true; };
-  }, [navigate]);
+  }, [navigate, status?.State]);
 
   const warnings = useMemo(
     () => buildWarnings(readiness, managedFolderCount, status),
     [readiness, managedFolderCount, status]
   );
 
-  return (
-    <div className="mx-auto max-w-7xl px-6 py-8 space-y-6">
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-          <p className="mt-0.5 text-xs text-gray-500">Server readiness, queue activity, provider status, and collection health.</p>
+  useEffect(() => {
+    localStorage.setItem(dashboardPrefsKey, JSON.stringify({ order: panelOrder, visibility: panelVisibility }));
+  }, [panelOrder, panelVisibility]);
+
+  function movePanel(panelId: DashboardPanelId, direction: -1 | 1) {
+    setPanelOrder(current => {
+      const index = current.indexOf(panelId);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) return current;
+      const next = [...current];
+      [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+      return next;
+    });
+  }
+
+  function resetPanelSettings() {
+    setPanelOrder(defaultDashboardPanelOrder);
+    setPanelVisibility(defaultDashboardPanelVisibility());
+  }
+
+  function renderDashboardPanel(panelId: DashboardPanelId) {
+    if (panelVisibility[panelId] === false) return null;
+
+    if (panelId === 'summary') {
+      return (
+        <div key={panelId} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <StatCard label="Status" value={status?.State ?? '—'} />
+          <StatCard label="Uptime" value={status?.Uptime ?? '—'} />
+          <StatCard label="Folders" value={managedFolderCount == null ? '—' : String(managedFolderCount)} />
+          <StatCard label="Series" value={stats ? String(stats.SeriesCount) : '—'} />
+          <StatCard label="Files" value={stats ? String(stats.FileCount) : '—'} />
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-          {version && <span>Server {version}</span>}
-          {webuiVersion && <span>WebUI {webuiVersion}</span>}
+      );
+    }
+
+    if (panelId === 'warnings') {
+      return warnings.length > 0 ? <WarningPanel key={panelId} warnings={warnings} /> : null;
+    }
+
+    if (panelId === 'queue-plex') {
+      return (
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+          <QueueWidget queue={queue} connState={queueConnection} />
+          {readiness ? (
+            <PlexPanel plex={readiness.PlexTarget} />
+          ) : (
+            <SkeletonPanel title="Plex Target" message="Waiting for readiness data…" />
+          )}
         </div>
-      </div>
+      );
+    }
 
-      {error && (
-        <div className="app-card rounded-md border-red-700/50 px-4 py-3 text-sm text-red-400">
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <StatCard label="Status" value={status?.State ?? '—'} />
-        <StatCard label="Uptime" value={status?.Uptime ?? '—'} />
-        <StatCard label="Folders" value={managedFolderCount == null ? '—' : String(managedFolderCount)} />
-        <StatCard label="Series" value={stats ? String(stats.SeriesCount) : '—'} />
-        <StatCard label="Files" value={stats ? String(stats.FileCount) : '—'} />
-      </div>
-
-      {warnings.length > 0 && <WarningPanel warnings={warnings} />}
-
-      {readinessError && (
-        <div className="app-card rounded-md border-yellow-700/50 px-4 py-3 text-sm text-yellow-400">
-          {readinessError}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-        <QueueWidget queue={queue} connState={queueConn} />
-        {readiness ? (
-          <PlexPanel plex={readiness.PlexTarget} />
-        ) : (
-          <SkeletonPanel title="Plex Target" message="Waiting for readiness data…" />
-        )}
-      </div>
-
-      {readiness && (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+    if (panelId === 'providers') {
+      return readiness ? (
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <ProviderPanel providers={readiness.Providers} />
           <CollectionManagerPanel status={readiness.CollectionManager} />
         </div>
-      )}
+      ) : null;
+    }
 
-      {stats && (
-        <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    if (panelId === 'collection-health') {
+      return stats ? (
+        <div key={panelId} className="space-y-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Groups" value={String(stats.GroupCount)} />
             <StatCard label="Watched" value={`${stats.WatchedHours}h`} />
             <StatCard label="File Size" value={fmtBytes(stats.FileSize)} />
@@ -241,10 +227,56 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-        </>
+        </div>
+      ) : null;
+    }
+
+    if (panelId === 'capabilities') {
+      return readiness ? <CapabilitiesPanel key={panelId} capabilities={readiness.ServerCapabilities} /> : null;
+    }
+
+    return null;
+  }
+
+  return (
+    <div className="mx-auto w-full space-y-6 py-8" style={{ maxWidth: 'min(80rem, calc(100vw - 5rem))' }}>
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-white">Dashboard</h1>
+          <p className="mt-0.5 max-w-xs text-xs text-gray-500 sm:max-w-none">Server readiness, queue activity, provider status, and collection health.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+          {versions?.Server.Version && <span>Server {versions.Server.Version}</span>}
+          {versions?.WebUI?.Version && <span>WebUI {versions.WebUI.Version}</span>}
+          <button type="button" onClick={() => setPanelSettingsOpen(true)} className="text-blue-400 hover:text-blue-300">Panels</button>
+          <button type="button" onClick={() => void refresh()} className="text-blue-400 hover:text-blue-300">Refresh</button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="app-card rounded-md border-red-700/50 px-4 py-3 text-sm text-red-400">
+          {error}
+        </div>
       )}
 
-      {readiness && <CapabilitiesPanel capabilities={readiness.ServerCapabilities} />}
+      {liveError && (
+        <div className="app-card rounded-md border-yellow-700/50 px-4 py-3 text-sm text-yellow-400">
+          {liveError}
+        </div>
+      )}
+
+      {panelOrder.map(panelId => renderDashboardPanel(panelId))}
+
+      {panelSettingsOpen && (
+        <DashboardPanelSettings
+          order={panelOrder}
+          visibility={panelVisibility}
+          onClose={() => setPanelSettingsOpen(false)}
+          onMove={movePanel}
+          onReset={resetPanelSettings}
+          onToggle={(panelId, checked) => setPanelVisibility(current => ({ ...current, [panelId]: checked }))}
+        />
+      )}
     </div>
   );
 }
@@ -308,7 +340,7 @@ function buildWarnings(
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="app-card rounded-md px-5 py-4">
+    <div className="app-card min-w-0 rounded-md px-5 py-4">
       <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
       <p className="mt-1 truncate text-xl font-semibold text-white">{value}</p>
     </div>
@@ -326,10 +358,10 @@ function WarningPanel({ warnings }: { warnings: WarningItem[] }) {
       <ul className="divide-y divide-gray-800/50">
         {warnings.map(warning => (
           <li key={warning.key} className="px-5 py-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-col items-start gap-3 sm:flex-row sm:justify-between">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-yellow-200">{warning.title}</p>
-                <p className="mt-0.5 text-xs text-gray-500">{warning.detail}</p>
+                <p className="mt-0.5 max-w-xs break-words text-xs text-gray-500 sm:max-w-none">{warning.detail}</p>
               </div>
               {warning.to && (
                 <Link to={warning.to} className="shrink-0 text-xs font-medium text-blue-400 hover:text-blue-300">
@@ -477,7 +509,7 @@ function HealthRow({ label, value, warn }: { label: string; value: number | stri
   return (
     <div className="flex items-center justify-between gap-4 py-1.5 text-sm">
       <span className="text-gray-400">{label}</span>
-      <span className={`truncate text-right ${warn ? 'font-medium text-yellow-400' : 'text-gray-300'}`}>{value}</span>
+      <span className={`min-w-0 truncate text-right ${warn ? 'font-medium text-yellow-400' : 'text-gray-300'}`}>{value}</span>
     </div>
   );
 }
@@ -566,4 +598,112 @@ function formatQueueValue(value: unknown) {
   } catch {
     return String(value);
   }
+}
+
+function defaultDashboardPanelVisibility(): Record<DashboardPanelId, boolean> {
+  return defaultDashboardPanelOrder.reduce((acc, panelId) => {
+    acc[panelId] = true;
+    return acc;
+  }, {} as Record<DashboardPanelId, boolean>);
+}
+
+function loadDashboardPrefs() {
+  const fallback = {
+    order: defaultDashboardPanelOrder,
+    visibility: defaultDashboardPanelVisibility(),
+  };
+
+  try {
+    const raw = localStorage.getItem(dashboardPrefsKey);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as Partial<{
+      order: DashboardPanelId[];
+      visibility: Partial<Record<DashboardPanelId, boolean>>;
+    }>;
+    const parsedOrder = parsed.order?.filter(panelId => defaultDashboardPanelOrder.includes(panelId)) ?? [];
+    const order = [
+      ...parsedOrder,
+      ...defaultDashboardPanelOrder.filter(panelId => !parsedOrder.includes(panelId)),
+    ];
+    return {
+      order,
+      visibility: {
+        ...defaultDashboardPanelVisibility(),
+        ...parsed.visibility,
+      },
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function DashboardPanelSettings({
+  onClose,
+  onMove,
+  onReset,
+  onToggle,
+  order,
+  visibility,
+}: {
+  onClose: () => void;
+  onMove: (panelId: DashboardPanelId, direction: -1 | 1) => void;
+  onReset: () => void;
+  onToggle: (panelId: DashboardPanelId, checked: boolean) => void;
+  order: DashboardPanelId[];
+  visibility: Record<DashboardPanelId, boolean>;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
+      <div className="app-surface w-full max-w-lg rounded-md p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Dashboard Panels</h2>
+            <p className="mt-1 text-sm text-gray-500">Show, hide, and reorder dashboard panels for this browser.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-sm text-gray-500 hover:text-gray-200">Close</button>
+        </div>
+
+        <div className="mt-5 divide-y divide-gray-800/70 rounded-md border border-gray-800/70">
+          {order.map((panelId, index) => (
+            <div key={panelId} className="flex flex-wrap items-center gap-3 px-4 py-3">
+              <label className="flex min-w-0 flex-1 items-center gap-3 text-sm text-gray-200">
+                <input
+                  type="checkbox"
+                  checked={visibility[panelId] !== false}
+                  onChange={event => onToggle(panelId, event.target.checked)}
+                  className="rounded border-gray-600 bg-gray-900 accent-blue-500"
+                />
+                <span>{dashboardPanelLabels[panelId]}</span>
+              </label>
+              <button
+                type="button"
+                disabled={index === 0}
+                onClick={() => onMove(panelId, -1)}
+                className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 disabled:opacity-40"
+              >
+                Up
+              </button>
+              <button
+                type="button"
+                disabled={index === order.length - 1}
+                onClick={() => onMove(panelId, 1)}
+                className="rounded border border-gray-700 px-2 py-1 text-xs text-gray-300 disabled:opacity-40"
+              >
+                Down
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 flex justify-end gap-3">
+          <button type="button" onClick={onReset} className="rounded-md border border-gray-700 px-3 py-2 text-sm text-gray-300 hover:text-white">
+            Reset
+          </button>
+          <button type="button" onClick={onClose} className="rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-black hover:bg-blue-400">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }

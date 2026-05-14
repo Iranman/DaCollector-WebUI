@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Check, Image as ImageIcon, KeyRound, Link2, Palette, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { ApiError } from '../api/client';
@@ -11,11 +11,13 @@ import { User, CreateOrUpdateUserBody, CreateUserBody, usersApi } from '../api/u
 import { ReleaseChannel, webuiApi, WebUITheme } from '../api/webui';
 import { plexTargetApi, PlexLibrarySection, PlexServerIdentity } from '../api/plexTarget';
 import Button from '../components/ui/Button';
+import { useConfirm } from '../components/ui/ConfirmProvider';
 import SectionHeader from '../components/ui/SectionHeader';
 import Select from '../components/ui/Select';
 import SettingsRow from '../components/ui/SettingsRow';
 import TextInput from '../components/ui/TextInput';
 import Toggle from '../components/ui/Toggle';
+import { useToast } from '../components/ui/ToastProvider';
 
 type SectionId =
   | 'general'
@@ -75,9 +77,12 @@ const defaultExcludedRelations = ['Same Setting', 'Character', 'Other'];
 
 export default function Settings() {
   const navigate = useNavigate();
+  const confirm = useConfirm();
+  const { notify } = useToast();
   const { section } = useParams();
   const activeSection = normalizeSection(section);
   const [settings, setSettings] = useState<ServerSettings>({});
+  const [originalSettings, setOriginalSettings] = useState<ServerSettings>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,11 +93,16 @@ export default function Settings() {
   const [tokensError, setTokensError] = useState<string | null>(null);
   const [newTokenName, setNewTokenName] = useState('');
   const [generatedToken, setGeneratedToken] = useState<string | null>(null);
+  const dirty = useMemo(
+    () => !standaloneSections.includes(activeSection) && JSON.stringify(settings) !== JSON.stringify(originalSettings),
+    [activeSection, originalSettings, settings]
+  );
 
   useEffect(() => {
     settingsApi.get()
       .then(s => {
         setSettings(s);
+        setOriginalSettings(s);
         setLoading(false);
       })
       .catch(err => {
@@ -104,6 +114,17 @@ export default function Settings() {
         }
       });
   }, [navigate]);
+
+  useEffect(() => {
+    function beforeUnload(event: BeforeUnloadEvent) {
+      if (!dirty) return;
+      event.preventDefault();
+      event.returnValue = '';
+    }
+
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [dirty]);
 
   useEffect(() => {
     if (activeSection === 'api-keys') {
@@ -130,13 +151,41 @@ export default function Settings() {
     setSaved(false);
     try {
       await settingsApi.update(settings);
+      setOriginalSettings(settings);
       setSaved(true);
+      notify({ message: 'Settings saved.', tone: 'success' });
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Save failed.');
+      const message = err instanceof Error ? err.message : 'Save failed.';
+      setError(message);
+      notify({ message, title: 'Settings save failed', tone: 'error' });
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleCancel() {
+    setSettings(originalSettings);
+    setSaved(false);
+    setError(null);
+    notify({ message: 'Unsaved settings were discarded.', tone: 'info' });
+  }
+
+  async function navigateSection(sectionId: SectionId) {
+    if (sectionId === activeSection) return;
+    if (dirty) {
+      const discard = await confirm({
+        confirmLabel: 'Discard Changes',
+        message: 'You have unsaved core settings changes. Discard them and switch sections?',
+        title: 'Unsaved Settings',
+        tone: 'warning',
+      });
+      if (!discard) return;
+      setSettings(originalSettings);
+      setSaved(false);
+      setError(null);
+    }
+    navigate(`/settings/${sectionId}`);
   }
 
   async function handleGenerateToken() {
@@ -203,18 +252,18 @@ export default function Settings() {
   }
 
   return (
-    <div className="px-4 py-6 sm:px-6 sm:py-8">
-      <div className="mx-auto max-w-5xl">
-        <form onSubmit={handleSave} className="app-surface flex flex-col overflow-hidden rounded-none md:min-h-[42rem] md:flex-row">
+    <div className="overflow-x-hidden py-6 sm:py-8">
+      <div className="mx-auto w-full min-w-0" style={{ maxWidth: 'min(64rem, calc(100vw - 5rem))' }}>
+        <form onSubmit={handleSave} className="app-surface flex w-full max-w-full flex-col overflow-hidden rounded-none md:min-h-[42rem] md:flex-row">
           <aside className="w-full shrink-0 border-b border-gray-700/50 bg-[#0d0d1a]/70 py-5 md:w-52 md:border-b-0 md:border-r">
-            <h1 className="px-6 pb-5 text-xl font-semibold text-white">Settings</h1>
+            <h1 className="px-4 pb-5 text-xl font-semibold text-white sm:px-6">Settings</h1>
             <nav className="grid grid-cols-2 gap-1 sm:grid-cols-4 md:block md:space-y-1">
               {sections.map(item => (
                 <button
                   key={item.id}
                   type="button"
-                  onClick={() => navigate(`/settings/${item.id}`)}
-                  className={`block w-full border-l-2 px-6 py-2.5 text-left text-sm transition-colors ${
+                  onClick={() => void navigateSection(item.id)}
+                  className={`block w-full border-l-2 px-4 py-2.5 text-left text-sm transition-colors sm:px-6 ${
                     activeSection === item.id
                       ? 'border-blue-500 bg-blue-600/20 text-white'
                       : 'border-transparent text-gray-400 hover:text-gray-200'
@@ -226,9 +275,14 @@ export default function Settings() {
             </nav>
           </aside>
 
-          <section className="flex min-w-0 flex-1 flex-col bg-[#0d0d1a]/55 p-5 sm:p-8">
+          <section className="flex min-w-0 flex-1 flex-col bg-[#0d0d1a]/55 p-4 sm:p-8">
             {error && <Alert tone="error">{error}</Alert>}
             {saved && <Alert tone="success">Settings saved.</Alert>}
+            {dirty && (
+              <Alert tone="warning">
+                Unsaved changes in this settings section. Save or cancel before switching workflows.
+              </Alert>
+            )}
 
             <div className="flex-1">
               {activeSection === 'general' && (
@@ -301,11 +355,11 @@ export default function Settings() {
             </div>
 
             {!standaloneSections.includes(activeSection) && (
-              <div className="mt-8 flex flex-wrap justify-end gap-3 border-t border-gray-700/50 pt-5">
-                <Button variant="secondary" onClick={() => window.location.reload()}>
+              <div className="mt-8 flex flex-wrap justify-start gap-3 border-t border-gray-700/50 pt-5 sm:justify-end">
+                <Button variant="secondary" onClick={handleCancel} disabled={!dirty || saving}>
                   Cancel
                 </Button>
-                <Button type="submit" disabled={saving}>
+                <Button type="submit" disabled={saving || !dirty}>
                   {saving ? 'Saving…' : 'Save'}
                 </Button>
               </div>
@@ -1694,10 +1748,12 @@ function SettingGroup({ title, children }: { title: string; children: React.Reac
   );
 }
 
-function Alert({ tone, children }: { tone: 'error' | 'success'; children: React.ReactNode }) {
-  const classes = tone === 'error'
-    ? 'border-red-500/50 bg-red-950/40 text-red-200'
-    : 'border-emerald-500/50 bg-emerald-950/40 text-emerald-200';
+function Alert({ tone, children }: { tone: 'error' | 'success' | 'warning'; children: React.ReactNode }) {
+  const classes = {
+    error: 'border-red-500/50 bg-red-950/40 text-red-200',
+    success: 'border-emerald-500/50 bg-emerald-950/40 text-emerald-200',
+    warning: 'border-yellow-500/50 bg-yellow-950/30 text-yellow-200',
+  }[tone];
   return <div className={`mb-5 rounded-md border px-4 py-3 text-sm ${classes}`}>{children}</div>;
 }
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   CheckCircle2,
@@ -53,6 +53,8 @@ import {
 } from '../api/relocation';
 import { managedFoldersApi, ManagedFolder } from '../api/managedFolders';
 import { ApiError } from '../api/client';
+import { useConfirm } from '../components/ui/ConfirmProvider';
+import { useToast } from '../components/ui/ToastProvider';
 
 type ReviewTab = 'unmatched' | 'duplicates' | 'missing' | 'integrity' | 'relocation';
 type ReviewStatusFilter = 'all' | 'Pending' | 'Ignored' | 'ManualMatch';
@@ -89,9 +91,27 @@ function defaultFileState(): FileState {
 
 export default function FileReview() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const confirm = useConfirm();
+  const { notify } = useToast();
   const [activeTab, setActiveTab] = useState<ReviewTab>('unmatched');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (isReviewTab(tab) && tab !== activeTab) {
+      setActiveTab(tab);
+    }
+    if (searchParams.get('ignored') === 'true') {
+      setIncludeIgnored(true);
+    }
+  }, [activeTab, searchParams]);
+
+  function selectTab(tab: ReviewTab) {
+    setActiveTab(tab);
+    setSearchParams(tab === 'unmatched' ? {} : { tab });
+  }
 
   const [files, setFiles] = useState<MediaFileReviewItem[]>([]);
   const [unmatchedTotal, setUnmatchedTotal] = useState(0);
@@ -486,13 +506,14 @@ export default function FileReview() {
     const prompt = scanOnline
       ? 'Scan unmatched files and allow online provider lookup? This may contact provider APIs.'
       : 'Scan unmatched files against cached provider records?';
-    if (!window.confirm(prompt)) return;
+    if (!await confirm({ message: prompt, title: 'Scan Unmatched Files', tone: scanOnline ? 'warning' : 'default' })) return;
 
     setBatchScanning(true);
     setError(null);
     try {
       const result = await fileReviewApi.scanAllMatches(includeIgnored, scanOnline);
       setNotice(`Scanned ${result.ScannedFileCount} files and found ${result.CandidateCount} candidates.`);
+      notify({ message: `Scanned ${result.ScannedFileCount} files and found ${result.CandidateCount} candidates.`, tone: 'success' });
       await loadUnmatched();
     } catch (err) {
       handleError(err, 'Batch scan failed.');
@@ -519,7 +540,12 @@ export default function FileReview() {
         deletePhysicalFile ? 'Physical file deletion is enabled.' : 'Only the duplicate location record will be deleted.',
         'Continue?',
       ].join('\n');
-      if (!window.confirm(message)) return;
+      if (!await confirm({
+        confirmLabel: deletePhysicalFile ? 'Delete' : 'Remove Record',
+        message,
+        title: 'Delete Duplicate Location',
+        tone: deletePhysicalFile ? 'danger' : 'warning',
+      })) return;
 
       const result = await duplicatesApi.deleteLocation(
         location.LocationID,
@@ -528,6 +554,7 @@ export default function FileReview() {
         deleteEmptyFolders
       );
       setNotice(result.Message || 'Duplicate remove candidate deleted.');
+      notify({ message: result.Message || 'Duplicate remove candidate deleted.', tone: 'success' });
       await loadDuplicates();
     } catch (err) {
       handleError(err, 'Duplicate delete failed.');
@@ -545,7 +572,7 @@ export default function FileReview() {
       .map(id => folders.find(folder => folder.ID === id)?.Name ?? `Folder ${id}`)
       .join(', ');
     const prompt = `Start an integrity scan for ${selectedFolderIDs.length} folder(s): ${folderList}?`;
-    if (!window.confirm(prompt)) return;
+    if (!await confirm({ confirmLabel: 'Start Scan', message: prompt, title: 'Start Integrity Scan' })) return;
 
     setRunningIntegrity(true);
     setError(null);
@@ -554,6 +581,7 @@ export default function FileReview() {
       const scan = await integrityApi.createScan(selectedFolderIDs);
       await integrityApi.startScan(scan.ID, checkHash);
       setNotice(`Integrity scan ${scan.ID} started.`);
+      notify({ message: `Integrity scan ${scan.ID} started.`, tone: 'success' });
       setSelectedScanID(scan.ID);
       await loadIntegrity();
     } catch (err) {
@@ -564,12 +592,13 @@ export default function FileReview() {
   }
 
   async function handleStartExistingScan(scanID: number) {
-    if (!window.confirm(`Start integrity scan ${scanID}?`)) return;
+    if (!await confirm({ confirmLabel: 'Start Scan', message: `Start integrity scan ${scanID}?`, title: 'Start Integrity Scan' })) return;
     setRunningIntegrity(true);
     setError(null);
     try {
       await integrityApi.startScan(scanID, checkHash);
       setNotice(`Integrity scan ${scanID} started.`);
+      notify({ message: `Integrity scan ${scanID} started.`, tone: 'success' });
       await loadIntegrity();
     } catch (err) {
       handleError(err, 'Failed to start integrity scan.');
@@ -579,12 +608,18 @@ export default function FileReview() {
   }
 
   async function handleDeleteIntegrityScan(scanID: number) {
-    if (!window.confirm(`Delete integrity scan ${scanID} and its file results?`)) return;
+    if (!await confirm({
+      confirmLabel: 'Delete Scan',
+      message: `Delete integrity scan ${scanID} and its file results?`,
+      title: 'Delete Integrity Scan',
+      tone: 'danger',
+    })) return;
     setDeletingScanID(scanID);
     setError(null);
     try {
       await integrityApi.deleteScan(scanID);
       setNotice(`Integrity scan ${scanID} deleted.`);
+      notify({ message: `Integrity scan ${scanID} deleted.`, tone: 'success' });
       if (selectedScanID === scanID) setSelectedScanID(null);
       await loadIntegrity();
     } catch (err) {
@@ -660,7 +695,12 @@ export default function FileReview() {
       relocationDeleteEmptyDirectories ? 'Empty source directories may be deleted by the server when applicable.' : 'Empty source directories will be left in place.',
       'Continue?',
     ].join('\n');
-    if (!window.confirm(prompt)) return;
+    if (!await confirm({
+      confirmLabel: 'Apply Relocation',
+      message: prompt,
+      title: 'Apply Relocation',
+      tone: relocationDeleteEmptyDirectories ? 'warning' : 'default',
+    })) return;
 
     setApplyingRelocation(true);
     setError(null);
@@ -671,6 +711,7 @@ export default function FileReview() {
       const appliedFailures = results.filter(result => !result.IsSuccess).length;
       setRelocationApplyResults(results);
       setNotice(`Relocation applied: ${appliedCount} changed, ${appliedFailures} failed or warned.`);
+      notify({ message: `Relocation applied: ${appliedCount} changed, ${appliedFailures} failed or warned.`, tone: appliedFailures > 0 ? 'warning' : 'success' });
       await loadRelocation();
     } catch (err) {
       handleError(err, 'Relocation apply failed.');
@@ -720,19 +761,19 @@ export default function FileReview() {
       </div>
 
       <div className="flex flex-wrap items-center gap-1 border-b border-gray-700/50">
-        <TabButton active={activeTab === 'unmatched'} onClick={() => setActiveTab('unmatched')} icon={<Search size={14} />}>
+        <TabButton active={activeTab === 'unmatched'} onClick={() => selectTab('unmatched')} icon={<Search size={14} />}>
           Unmatched
         </TabButton>
-        <TabButton active={activeTab === 'duplicates'} onClick={() => setActiveTab('duplicates')} icon={<Copy size={14} />}>
+        <TabButton active={activeTab === 'duplicates'} onClick={() => selectTab('duplicates')} icon={<Copy size={14} />}>
           Duplicates
         </TabButton>
-        <TabButton active={activeTab === 'missing'} onClick={() => setActiveTab('missing')} icon={<FileWarning size={14} />}>
+        <TabButton active={activeTab === 'missing'} onClick={() => selectTab('missing')} icon={<FileWarning size={14} />}>
           Missing
         </TabButton>
-        <TabButton active={activeTab === 'integrity'} onClick={() => setActiveTab('integrity')} icon={<ShieldCheck size={14} />}>
+        <TabButton active={activeTab === 'integrity'} onClick={() => selectTab('integrity')} icon={<ShieldCheck size={14} />}>
           Integrity
         </TabButton>
-        <TabButton active={activeTab === 'relocation'} onClick={() => setActiveTab('relocation')} icon={<FolderOpen size={14} />}>
+        <TabButton active={activeTab === 'relocation'} onClick={() => selectTab('relocation')} icon={<FolderOpen size={14} />}>
           Relocation
         </TabButton>
       </div>
@@ -2433,4 +2474,12 @@ function isIntegrityError(status: IntegrityFileStatus) {
 
 function isConcreteIntegrityStatus(filter: IntegrityFileFilter): filter is IntegrityFileStatus {
   return filter !== 'all' && filter !== 'errors';
+}
+
+function isReviewTab(value: string | null): value is ReviewTab {
+  return value === 'unmatched'
+    || value === 'duplicates'
+    || value === 'missing'
+    || value === 'integrity'
+    || value === 'relocation';
 }

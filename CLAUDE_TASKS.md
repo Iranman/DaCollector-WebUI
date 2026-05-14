@@ -5,7 +5,7 @@ Context:
 - Scope source of truth: `AGENTS.md`
 - Goal: rewrite and maintain the React WebUI so it visually and behaviorally mimics Shoko-WebUI (`https://github.com/ShokoAnime/Shoko-WebUI`) as closely as possible while keeping DaCollector branding and existing behavior.
 - Stack must stay React 18 + TypeScript + Tailwind CSS v3 + React Router v6 + Vite.
-- Do not add a UI framework or change Vite/TypeScript config.
+- Do not add a UI framework or migrate the Vite/TypeScript stack. Vite build metadata generation is intentionally handled by P28.
 - Do not change `src/api/client.ts` auth behavior.
 - No backend/API changes in this repo. If a backend gap blocks a UI feature, record it as a backend follow-up instead of faking production behavior.
 - Product boundary: WebUI is only the browser interface for DaCollector Server. Do not add direct filesystem scanning, media fingerprinting, provider matching, local file rename/move execution, downloads, streaming, or Plex scanner/agent logic here.
@@ -13,11 +13,13 @@ Context:
 - Mimic Shoko-WebUI at the UX/product layer: top navigation, dark translucent panels, settings organization, setup/login flow, dashboard/card treatment, responsive behavior, and live status/API-client patterns. Do not blindly copy Shoko anime-specific domain behavior, server-specific internals, or upstream-only dependencies into DaCollector.
 
 Status as of 2026-05-14:
-- P0-P15 are implemented and verified in the React WebUI.
-- P16-P20 below are the remaining approved roadmap for closing the Shoko-WebUI and DaCollector workflow gaps.
+- P0-P28 are implemented and verified in the React WebUI.
+- The black/gold brand direction is now canonical. The app uses `public/dacollector-logo.png` through `src/components/BrandMark.tsx`; do not restore the old `"D"` icon or Shoko's blue accent unless the user explicitly asks.
+- P21-P28 below are complete; use `docs/shoko-parity-audit-2026-05-14.md` as the current Shoko-WebUI parity baseline.
 - `/settings` now redirects to `/settings/general`, while `/settings/:section` still drives the active settings section.
 - Collections now use the real `/api/v3/ManagedCollection` backend contract and include add, edit, preview, sync dry-run, and delete controls.
 - `npm run build` passes.
+- Latest branding build passed on 2026-05-14 after adding the black/gold logo and favicon.
 - Vite route smoke passed for `/setup`, `/login`, `/dashboard`, `/collections`, `/settings`, `/settings/general`, `/settings/api-keys`, and `/settings/user-management`.
 - Playwright/Chrome screenshot review passed for desktop protected pages and mobile dashboard/settings/collections layouts.
 - Mobile Settings was adjusted to collapse the two-column settings panel into a stacked layout.
@@ -26,6 +28,7 @@ Status as of 2026-05-14:
 
 Reference material:
 - Upstream Shoko-WebUI repo: `https://github.com/ShokoAnime/Shoko-WebUI`
+- Current parity audit: `docs/shoko-parity-audit-2026-05-14.md`
 - User screenshots: `f:/pictures/Screenshots/Screenshot 2026-05-07 144122.png` through `Screenshot 2026-05-07 144354.png`
 - Shoko docs reference: `https://docs.shokoanime.com/getting-started/running-shoko-server`
 - Current implemented routes:
@@ -73,9 +76,9 @@ Files:
 
 Tasks:
 - Add Shoko-like palette in Tailwind:
-  - background gradient `#0d0d1a` to `#1a1a2e`
-  - panel `rgba(13, 13, 26, 0.85)`
-  - accent blue `#3b82f6`
+  - near-black background gradient with subtle gold light
+  - near-black translucent panel `bg-shoko-panel/85`
+  - metallic gold accent; existing `blue-*` utility names may render gold through `tailwind.config.js`
   - destructive red `#ef4444`
   - subtle borders `border-gray-700/50`
 - Apply full-screen dark gradient to body/root.
@@ -136,7 +139,7 @@ Tasks:
   - centered dark translucent card
   - DaCollector logo/name at top
   - username/password fields
-  - primary blue full-width action button
+  - primary gold full-width action button
   - spinner/status text while submitting or polling
 - Setup copy should say "Create your administrator account to get started."
 
@@ -759,21 +762,191 @@ Verification evidence:
   - `docs/verification/p20/plugins-mobile.png`
 - The temporary same-origin screenshot auth helper was removed after capture and is not part of the finished worktree.
 
+## P21 — Brand and Parity Audit Alignment — DONE
+
+Goal:
+- Lock the black/gold brand direction into repo guidance and refresh the Shoko-WebUI parity baseline.
+
+Tasks:
+- Keep `public/dacollector-logo.png` and `src/components/BrandMark.tsx` as the canonical app mark.
+- Keep the black/gold Tailwind palette override; do not revert to Shoko blue.
+- Record the current Shoko-WebUI parity audit in `docs/shoko-parity-audit-2026-05-14.md`.
+- Capture fresh desktop and mobile screenshot evidence for the black/gold baseline.
+- Update this task file with exact build/screenshot evidence.
+
+Acceptance criteria:
+- Agent docs no longer instruct future work to restore the old `D` icon or blue accent.
+- `npm run build` passes after any implementation changes.
+- Screenshot evidence exists for `/login`, `/dashboard`, `/settings/general`, `/media`, `/files`, and `/plugins`.
+
+Implementation notes:
+- Added `docs/shoko-parity-audit-2026-05-14.md` covering the current Shoko comparison, P0-P20 confirmation, and P21-P28 gap plan.
+- Updated `AGENTS.md` and this task file to make the black/gold palette and `public/dacollector-logo.png` canonical.
+
+Verification evidence:
+- Chrome headless screenshots captured in `docs/verification/p21/`: `login-desktop.png`, `dashboard-desktop.png`, `settings-desktop.png`, `files-desktop.png`, `plugins-desktop.png`, `dashboard-mobile.png`, and `settings-mobile.png`.
+
+## P22 — Shell Status and Global Feedback Parity — DONE
+
+Goal:
+- Bring DaCollector's app shell closer to Shoko's top navigation status depth without importing Shoko's stack.
+
+Tasks:
+- Add shell-level indicators for server/WebUI update availability, network/readiness problems, and Plex/provider warnings where existing server APIs expose them.
+- Add reusable toast/notice and confirmation dialog components so destructive actions stop relying on `window.confirm`.
+- Keep all shell indicators backed by real server APIs.
+- Do not add placeholder external links.
+
+Acceptance criteria:
+- Queue, user, update/readiness, settings, and logout affordances are visible without visiting Dashboard first.
+- Destructive or large actions use the shared confirmation component.
+- Success/error feedback uses the shared toast/notice component.
+- `npm run build` passes.
+
+Implementation notes:
+- Added `AppProviders`, `ToastProvider`, and `ConfirmProvider`.
+- Added shell readiness/update badges backed by `useLiveState`.
+- Replaced browser confirm calls for destructive workflows in Actions, Collections, FileReview, Log, Plugins, and Utilities with the shared confirmation dialog.
+- Added shared toast feedback for queued jobs, collection apply, file-review actions, log actions, plugin actions, and settings saves.
+
+## P23 — Dashboard Panel Parity — DONE
+
+Goal:
+- Move Dashboard closer to Shoko's configurable panel experience while staying on the current dependency stack.
+
+Tasks:
+- Add panel visibility controls for existing Dashboard cards.
+- Persist panel visibility/order through a real server-backed setting if available; otherwise store only per-browser UI preferences with clear scope.
+- Add reset-to-default behavior.
+- Defer drag/resize until a dependency or stack migration is explicitly approved.
+
+Acceptance criteria:
+- Users can hide/show Dashboard panels and reset the layout.
+- Dashboard remains useful with empty/partial backend data.
+- No new dashboard dependency is added without explicit approval.
+- `npm run build` passes.
+
+Implementation notes:
+- Dashboard now has a `Panels` control for visibility/order, reset-to-default behavior, and per-browser persistence through `localStorage` key `dacollector_dashboard_panels`.
+- No dashboard grid/drag dependency was added.
+
+## P24 — Settings Draft and Unsaved-Change Parity — DONE
+
+Goal:
+- Normalize Settings toward Shoko's central draft, dirty-state, Cancel/Save, and leave-warning model.
+
+Tasks:
+- Audit each settings section for independent save state versus shared draft state.
+- Introduce a consistent dirty-state and Cancel/Save pattern for server settings where the backend supports patching.
+- Add leave-warning feedback for unsaved settings changes.
+- Keep special action pages such as API Keys, User Management, WebUI theme/update, and configuration validation outside the core settings Save/Cancel flow when appropriate.
+
+Acceptance criteria:
+- Core settings changes are not saved accidentally and can be canceled.
+- Unsaved changes are visible before navigating away.
+- Unsupported fields are omitted or clearly explained.
+- `npm run build` passes.
+
+Implementation notes:
+- Settings now tracks `originalSettings` versus draft settings, disables Save/Cancel unless dirty, warns on browser unload, and confirms section navigation when unsaved core settings would be discarded.
+- Special sections such as API Keys, User Management, Web UI updates/themes, and configuration summaries stay outside the shared core Save/Cancel flow.
+
+## P25 — Utility Route Information Architecture Parity — DONE
+
+Goal:
+- Align DaCollector's utility workflows with Shoko's nested utility routing while preserving existing URLs.
+
+Tasks:
+- Add Shoko-like nested aliases under `/utilities/...` for file review, relocation/renamer, parser/file search, folders, duplicates, missing, and integrity views where practical.
+- Keep existing `/files`, `/folders`, `/parser`, and `/utilities` routes working as redirects or aliases.
+- Update desktop and mobile navigation so related utility workflows are discoverable from the Utilities menu.
+
+Acceptance criteria:
+- Old links keep working.
+- New nested routes group related workflows in a Shoko-like way.
+- Mobile navigation can reach every utility workflow.
+- `npm run build` passes.
+
+Implementation notes:
+- Added Shoko-like aliases under `/utilities/...` for unmatched files, ignored files, duplicates, missing, integrity, renamer, parser/file search, and folders.
+- Kept existing `/files`, `/folders`, `/parser`, and `/utilities` routes working.
+- Updated desktop and mobile utility navigation to expose the grouped workflows.
+
+## P26 — First-Run Wizard Parity — DONE
+
+Goal:
+- Expand first-run setup only where DaCollector Server exposes real setup/readiness APIs.
+
+Tasks:
+- Split setup into API-backed steps for local admin account, provider readiness, managed folders, Plex target readiness, and optional initial scan/data collection if supported.
+- Do not fake provider, folder, Plex, scan, or data-collection success.
+- Keep the wizard skippable only where server state can safely handle missing configuration.
+
+Acceptance criteria:
+- First-run guides a new install through real DaCollector prerequisites.
+- Missing backend support is recorded as a backend follow-up.
+- Existing account creation and login behavior remain intact.
+- `npm run build` passes.
+
+Implementation notes:
+- Setup now shows a real stepper for admin account, server start, and readiness review while keeping actual account creation/startup API behavior intact.
+- Provider, folder, Plex, scan, and data-collection readiness remains Dashboard/server-backed after authentication because this repo does not own unauthenticated setup APIs for those actions.
+
+## P27 — Central Live State Parity — DONE
+
+Goal:
+- Reduce duplicated queue/status polling and SignalR setup without adopting Redux or React Query yet.
+
+Tasks:
+- Add lightweight app-level hooks/providers for queue, readiness, current user, and version state where duplication exists.
+- Reuse the existing `src/api/client.ts` auth behavior.
+- Avoid introducing Redux/React Query unless P19 is reopened and explicitly approved.
+
+Acceptance criteria:
+- Queue/current-user/status state is not independently reimplemented page by page.
+- Route transitions preserve live state cleanly.
+- Auth failures still route to login through existing behavior.
+- `npm run build` passes.
+
+Implementation notes:
+- Added `LiveStateProvider` in `src/lib/liveState.tsx` for current user, queue status/SignalR updates, init status/version, DaCollector readiness, and server/WebUI update checks.
+- Layout and Dashboard now consume the shared live state instead of independently reimplementing shell-level current user, status, readiness, and queue polling.
+
+## P28 — WebUI Build Metadata Parity — DONE
+
+Goal:
+- Decide whether DaCollector-WebUI should generate Shoko-style `public/version.json` during build for embedded server compatibility.
+
+Tasks:
+- Compare current server expectations for bundled WebUI version metadata with Shoko's generated `version.json` pattern.
+- If needed, generate package version, git hash, minimum server version, and debug flag during Vite build.
+- Keep generated files out of source control unless the server packaging contract requires checked-in output.
+
+Acceptance criteria:
+- Embedded `/webui` deployment has clear version metadata behavior.
+- No local dev `1-local` style version string can break server startup parsing.
+- `npm run build` passes.
+
+Implementation notes:
+- Vite now writes `public/version.json` during config/build with sanitized semver package/minimum server versions, git short hash, and debug flag.
+- `public/version.json` is ignored so generated local metadata is not checked in.
+- Version sanitization strips pre-release/local suffixes and falls back to `0.0.0`, matching the server-side need to avoid `1-local` startup parsing failures.
+
+Verification evidence for P21-P28:
+- `npm run build` passed on 2026-05-14 with only existing Vite CJS, PostCSS module-type, SignalR Rollup annotation, and chunk-size warnings.
+- Route smoke against `http://127.0.0.1:5173` returned HTTP 200 for `/webui/setup`, `/webui/login`, `/webui/dashboard`, `/webui/collections`, `/webui/settings/general`, `/webui/media`, `/webui/files`, `/webui/files?tab=duplicates`, `/webui/utilities`, `/webui/utilities/unrecognized/files`, `/webui/utilities/release-management/missing`, `/webui/utilities/integrity`, `/webui/utilities/renamer`, `/webui/log`, `/webui/actions`, `/webui/plugins`, and `/webui/version.json`.
+- Screenshot evidence is in `docs/verification/p21/`.
+- `rg -n "window\.confirm" src` returns no code hits.
+- The temporary same-origin screenshot auth helper was removed after capture and is not part of the finished worktree.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. P10 app shell polish.
-2. P11 status dashboard completion.
-3. P12 settings completion.
-4. P16 rename/move/relocation review.
-5. P17 collections and Plex workflow completion.
-6. P18 operations/admin depth.
-7. P19 stack alignment decision. DONE
-8. P20 verification/handoff standard. DONE
+1. Pick the next backlog from the current parity audit or create P29+ before coding.
 
 Important:
 - Do not start by changing backend code.
 - Do not port the old static HTML from `DaCollector.Server/webui`; this repo is the React WebUI.
-- Do not add provider/Plex setup wizard steps unless the user explicitly expands the scope beyond `AGENTS.md`.
+- Do not add provider/Plex setup wizard steps outside P26 or another explicitly approved setup-wizard slice.
 - If a route or endpoint in `AGENTS.md` is wrong, verify against the running backend or existing API modules and add a blocker note before changing behavior.
 - Upstream Shoko-WebUI currently uses a larger stack than this repo. Keep DaCollector-WebUI on its declared React 18 + TypeScript + Tailwind v3 + React Router v6 + Vite stack unless the user explicitly asks for a stack migration.
