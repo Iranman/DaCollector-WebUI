@@ -3,12 +3,12 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Check, Image as ImageIcon, KeyRound, Link2, Palette, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { ApiError } from '../api/client';
 import { configurationApi, ConfigurationInfo } from '../api/configuration';
-import { ComponentVersion } from '../api/init';
+import { ComponentVersion, ComponentVersionSet, initApi } from '../api/init';
 import { settingsApi, ServerSettings } from '../api/settings';
 import { tagsApi, Tag } from '../api/tags';
 import { ApiToken, tokensApi } from '../api/tokens';
 import { User, CreateOrUpdateUserBody, CreateUserBody, usersApi } from '../api/users';
-import { ReleaseChannel, webuiApi, WebUITheme } from '../api/webui';
+import { ReleaseChannel, webuiApi, WebUIBuildMetadata, WebUITheme } from '../api/webui';
 import { plexTargetApi, PlexLibrarySection, PlexServerIdentity } from '../api/plexTarget';
 import Button from '../components/ui/Button';
 import { useConfirm } from '../components/ui/ConfirmProvider';
@@ -814,6 +814,8 @@ function WebUISettingsSection() {
   const [themes, setThemes] = useState<WebUITheme[]>([]);
   const [webVersion, setWebVersion] = useState<ComponentVersion | null>(null);
   const [serverVersion, setServerVersion] = useState<ComponentVersion | null>(null);
+  const [currentVersions, setCurrentVersions] = useState<ComponentVersionSet | null>(null);
+  const [buildMetadata, setBuildMetadata] = useState<WebUIBuildMetadata | null>(null);
   const [releaseChannel, setReleaseChannel] = useState<ReleaseChannel>('Auto');
   const [allowIncompatible, setAllowIncompatible] = useState(false);
   const [themeUrl, setThemeUrl] = useState('');
@@ -842,12 +844,16 @@ function WebUISettingsSection() {
   async function loadVersions(channel = releaseChannel, force = false) {
     setVersionLoading(true);
     try {
-      const [latestWeb, latestServer] = await Promise.all([
+      const [latestWeb, latestServer, installedVersions, metadata] = await Promise.all([
         webuiApi.latestVersion(channel, force, allowIncompatible),
         webuiApi.latestServerVersion(channel, force),
+        initApi.getVersion(),
+        webuiApi.buildMetadata(),
       ]);
       setWebVersion(latestWeb);
       setServerVersion(latestServer);
+      setCurrentVersions(installedVersions);
+      setBuildMetadata(metadata);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to check WebUI versions.');
     } finally {
@@ -974,6 +980,32 @@ function WebUISettingsSection() {
           <Button onClick={handleUpdateWebUI} disabled={Boolean(actionLoading)}>
             {actionLoading === 'webui-update' ? 'Updating...' : 'Update WebUI'}
           </Button>
+        </div>
+      </SettingGroup>
+
+      <SettingGroup title="Diagnostics">
+        <div className="grid gap-3 md:grid-cols-2">
+          <DiagnosticBlock
+            title="Current Install"
+            rows={[
+              ['Server', formatComponentVersion(currentVersions?.Server ?? null)],
+              ['WebUI', formatComponentVersion(currentVersions?.WebUI ?? null)],
+              ['WebUI Commit', shortCommit(currentVersions?.WebUI?.Commit)],
+              ['Server Commit', shortCommit(currentVersions?.Server?.Commit)],
+            ]}
+            loading={versionLoading}
+          />
+          <DiagnosticBlock
+            title="Bundled Client"
+            rows={[
+              ['Package', buildMetadata?.package ?? 'Unknown'],
+              ['Minimum Server', buildMetadata?.minimumServerVersion ?? 'Unknown'],
+              ['Channel', buildMetadata?.channel ?? 'Unknown'],
+              ['Commit', shortCommit(buildMetadata?.git)],
+              ['Built', formatDateTime(buildMetadata?.date)],
+            ]}
+            loading={versionLoading}
+          />
         </div>
       </SettingGroup>
 
@@ -1626,6 +1658,30 @@ function ReadonlyValue({ loading, value }: { loading: boolean; value: string }) 
   );
 }
 
+function DiagnosticBlock({
+  title,
+  rows,
+  loading,
+}: {
+  title: string;
+  rows: Array<[string, string]>;
+  loading: boolean;
+}) {
+  return (
+    <div className="rounded-md border border-gray-800/70 bg-gray-950/40 p-4">
+      <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{title}</div>
+      <dl className="space-y-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3 text-xs">
+            <dt className="text-gray-500">{label}</dt>
+            <dd className="min-w-0 break-words font-mono text-gray-300">{loading ? 'Checking...' : value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
     <span className="rounded border border-gray-700/70 bg-gray-900/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-400">
@@ -1643,6 +1699,17 @@ function formatComponentVersion(version: ComponentVersion | null) {
     version.ReleaseDate ? new Date(version.ReleaseDate).toLocaleDateString() : '',
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : 'Unknown';
+}
+
+function shortCommit(value?: string) {
+  if (!value) return 'Unknown';
+  return value.length > 12 ? value.slice(0, 12) : value;
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return 'Unknown';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
 function formatThemeVersion(version: WebUITheme['Version']) {

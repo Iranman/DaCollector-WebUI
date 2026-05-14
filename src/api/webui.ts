@@ -23,11 +23,30 @@ export interface WebUITheme {
   CSS?: string;
 }
 
+export interface WebUIBuildMetadata {
+  package?: string;
+  minimumServerVersion?: string;
+  tag?: string;
+  git?: string;
+  date?: string;
+  channel?: string;
+  debug?: boolean;
+}
+
 function releaseQuery(channel: ReleaseChannel, force = false, allowIncompatible = false) {
   return `channel=${channel}&force=${force}&allowIncompatible=${allowIncompatible}`;
 }
 
+async function getBuildMetadata(): Promise<WebUIBuildMetadata> {
+  const response = await fetch('/webui/version.json', { cache: 'no-store' });
+  if (!response.ok) {
+    throw new Error(`Failed to load WebUI build metadata: ${response.status} ${response.statusText}`.trim());
+  }
+  return response.json() as Promise<WebUIBuildMetadata>;
+}
+
 export const webuiApi = {
+  buildMetadata: getBuildMetadata,
   listThemes: (forceRefresh = false) => api.get<WebUITheme[]>(`/api/v3/WebUI/Theme?forceRefresh=${forceRefresh}`),
   addThemeFromUrl: (url: string, preview = false) =>
     api.post<WebUITheme>('/api/v3/WebUI/Theme/AddFromURL', { URL: url, Preview: preview }),
