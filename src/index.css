@@ -39,4 +39,16 @@
   .app-focus {
     @apply focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500;
   }
+
+  .admin-secondary-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-gray-600 bg-gray-800/70 px-3 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-gray-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .admin-warning-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-yellow-600/70 bg-yellow-900/50 px-3 py-2 text-sm font-medium text-yellow-100 transition-colors hover:border-yellow-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .admin-danger-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-red-500/70 bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50;
+  }
 }

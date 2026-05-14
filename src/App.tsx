@@ -11,6 +11,7 @@ import Settings from './pages/Settings';
 import Utilities from './pages/Utilities';
 import Log from './pages/Log';
 import Actions from './pages/Actions';
+import Plugins from './pages/Plugins';
 import Media from './pages/Media';
 import MediaDetail from './pages/MediaDetail';
 import FileReview from './pages/FileReview';
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="utilities" element={<Utilities />} />
           <Route path="log" element={<Log />} />
           <Route path="actions" element={<Actions />} />
+          <Route path="plugins" element={<Plugins />} />
         </Route>
         <Route
           path="*"

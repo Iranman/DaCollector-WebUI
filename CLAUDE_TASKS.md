@@ -655,7 +655,7 @@ Completion notes (2026-05-14):
 - Verification: `npm run build` passed with the existing Vite/module-type and SignalR Rollup annotation warnings only.
 - Live read-only API smoke against `http://127.0.0.1:38111` passed for `/api/v3/CollectionBuilder`, `/api/v3/ManagedCollection`, and `/api/v3/DaCollectorStatus/Plex`; the local server returned 15 builders, zero collections, and Plex warnings for missing token/section key.
 
-## P18 — Operations and Admin Depth — PENDING
+## P18 — Operations and Admin Depth — DONE
 
 Goal:
 - Bring queue, logs, actions, plugins, and update controls up to production-admin usefulness.
@@ -672,6 +672,14 @@ Acceptance criteria:
 - Dangerous actions are confirmed.
 - Unsupported deployment-mode actions are hidden or clearly explained.
 - `npm run build` passes.
+
+Implementation notes:
+- Expanded queue operations in `Utilities` with live status, type/search filters, running/waiting/blocked sections, selected job details, and confirmed global pause/resume/clear controls. Per-job retry/cancel is clearly explained as unsupported because `QueueController` does not expose those endpoints.
+- Expanded `Log` with log file selection, server-side REST filters, saved filter presets, copyable details, exception expansion, downloads, archived-file delete with confirmation, and a mobile card layout.
+- Expanded `Actions` with normal user actions separated from admin maintenance and admin purge actions. Admin actions are labeled/disabled for non-admin sessions and destructive jobs require confirmation.
+- Added plugin/package administration via `PluginController` and `PluginPackageController`, including plugin enable/disable/uninstall, package search/install, repository sync, and scheduled update checks.
+- WebUI update/theme controls were already surfaced in P12 under Settings; P18 keeps them there because they are deployment-specific and already explain the exposed server behavior.
+- Verification: `npm run build` passed with the existing Vite/module-type, SignalR Rollup annotation, and chunk-size warnings only. `git diff --check` passed with CRLF warnings only.
 
 ## P19 — Stack Alignment Decision — PENDING
 

@@ -13,6 +13,7 @@ import {
   FolderSearch,
   ScanLine,
   FolderOpen,
+  Plug,
   ChevronDown,
   Menu,
   X,
@@ -40,6 +41,7 @@ const primaryNav: NavItem[] = [
   { to: '/utilities', label: 'Utilities', Icon: Wrench },
   { to: '/log', label: 'Log', Icon: ScrollText },
   { to: '/actions', label: 'Actions', Icon: Zap },
+  { to: '/plugins', label: 'Plugins', Icon: Plug },
 ];
 
 const collectionNav: NavGroup = {

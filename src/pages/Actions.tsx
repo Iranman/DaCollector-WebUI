@@ -1,66 +1,73 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, AlertTriangle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Play, ShieldAlert, ShieldCheck } from 'lucide-react';
 import { actionsApi } from '../api/actions';
 import { ApiError } from '../api/client';
+import { usersApi, User } from '../api/users';
 
 interface ActionDef {
   id: string;
   label: string;
   description: string;
   fn: () => Promise<void>;
+  scope?: 'user' | 'admin';
   destructive?: boolean;
+  confirmation?: string;
 }
 
-const ACTION_GROUPS: { title: string; actions: ActionDef[] }[] = [
+interface ActionGroup {
+  title: string;
+  scope: 'user' | 'admin';
+  actions: ActionDef[];
+}
+
+const ACTION_GROUPS: ActionGroup[] = [
   {
-    title: 'Import',
+    title: 'Library Import',
+    scope: 'user',
     actions: [
       {
         id: 'run-import',
         label: 'Run Import',
-        description: 'Scan managed folders, hash new files, update community site links, and download missing images.',
+        description: 'Scan managed folders, hash new files, update provider links, and fill missing images.',
         fn: actionsApi.runImport,
       },
       {
         id: 'import-new-files',
         label: 'Import New Files Only',
-        description: 'Scan managed folders for new files only, without rescanning existing ones.',
+        description: 'Scan managed folders for new files without rescanning existing library entries.',
         fn: actionsApi.importNewFiles,
       },
       {
         id: 'remove-missing-files',
         label: 'Remove Missing Files',
-        description: 'Remove database entries for files that no longer exist on disk.',
+        description: 'Remove database entries for files that are no longer available on disk.',
         fn: () => actionsApi.removeMissingFiles(true),
         destructive: true,
+        confirmation: 'Remove database entries for missing files? This only affects records for files the server cannot access.',
       },
     ],
   },
   {
-    title: 'Images',
+    title: 'Images and Metadata',
+    scope: 'user',
     actions: [
       {
         id: 'update-all-images',
         label: 'Update All Images',
-        description: 'Download any missing images for series, episodes, and movies.',
+        description: 'Fetch missing images for locally known media.',
         fn: actionsApi.updateAllImages,
       },
       {
         id: 'validate-all-images',
         label: 'Validate All Images',
-        description: 'Check existing images for corruption and re-download any that are invalid.',
+        description: 'Check existing images for corruption and queue replacement for invalid images.',
         fn: actionsApi.validateAllImages,
       },
-    ],
-  },
-  {
-    title: 'TMDB',
-    actions: [
       {
         id: 'search-tmdb',
         label: 'Search for TMDB Matches',
-        description: 'Auto-match unlinked movies and TV shows to TMDB metadata.',
+        description: 'Auto-match unlinked local movies and TV shows to TMDB metadata.',
         fn: actionsApi.searchForTmdbMatches,
       },
       {
@@ -78,34 +85,147 @@ const ACTION_GROUPS: { title: string; actions: ActionDef[] }[] = [
       {
         id: 'download-tmdb-people',
         label: 'Download Missing TMDB People',
-        description: 'Fetch any missing cast and crew data from TMDB.',
+        description: 'Fetch missing cast and crew records referenced by local metadata.',
         fn: actionsApi.downloadMissingTmdbPeople,
       },
     ],
   },
   {
-    title: 'Database',
+    title: 'External State Sync',
+    scope: 'user',
+    actions: [
+      {
+        id: 'send-watch-states-trakt',
+        label: 'Send Watch States to Trakt',
+        description: 'Send local watch state to Trakt when the server has a linked Trakt account.',
+        fn: actionsApi.sendWatchStatesToTrakt,
+      },
+      {
+        id: 'get-watch-states-trakt',
+        label: 'Get Watch States from Trakt',
+        description: 'Import remote Trakt watch state into the local collection state.',
+        fn: actionsApi.getWatchStatesFromTrakt,
+      },
+    ],
+  },
+  {
+    title: 'Admin Maintenance',
+    scope: 'admin',
     actions: [
       {
         id: 'update-media-info',
         label: 'Update All Media Info',
-        description: 'Re-scan media info (codecs, resolution, audio) for all files.',
+        description: 'Re-scan codecs, resolution, audio, and duration for every known local file.',
         fn: actionsApi.updateAllMediaInfo,
-        destructive: true,
+        scope: 'admin',
       },
       {
         id: 'update-series-stats',
         label: 'Update Series Stats',
-        description: 'Recalculate all series statistics and group filters.',
+        description: 'Recalculate series statistics and group filters.',
         fn: actionsApi.updateSeriesStats,
-        destructive: true,
+        scope: 'admin',
+      },
+      {
+        id: 'rename-all-groups',
+        label: 'Rename All Groups',
+        description: 'Rename groups without custom names using the current language preference.',
+        fn: actionsApi.renameAllGroups,
+        scope: 'admin',
       },
       {
         id: 'recreate-all-groups',
         label: 'Recreate All Groups',
-        description: 'Delete and regenerate all series groups. This will remove any custom group names.',
+        description: 'Delete and regenerate all groups. Custom group names can be removed.',
         fn: actionsApi.recreateAllGroups,
+        scope: 'admin',
         destructive: true,
+        confirmation: 'Recreate all groups? This deletes and regenerates groups and can remove custom group names.',
+      },
+      {
+        id: 'plex-sync-all',
+        label: 'Sync Plex Watch States',
+        description: 'Queue Plex watched-state sync jobs for users with Plex tokens configured.',
+        fn: actionsApi.plexSyncAll,
+        scope: 'admin',
+      },
+    ],
+  },
+  {
+    title: 'Admin Purge Actions',
+    scope: 'admin',
+    actions: [
+      {
+        id: 'purge-unused-tmdb-movies',
+        label: 'Purge Unused TMDB Movies',
+        description: 'Remove TMDB movie records that are not linked to local media.',
+        fn: actionsApi.purgeAllUnusedTmdbMovies,
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Purge unused TMDB movie records? Local media files are not deleted.',
+      },
+      {
+        id: 'purge-tmdb-movie-collections',
+        label: 'Purge TMDB Movie Collections',
+        description: 'Remove cached TMDB movie collection data.',
+        fn: actionsApi.purgeAllTmdbMovieCollections,
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Purge all TMDB movie collection records?',
+      },
+      {
+        id: 'purge-unused-tmdb-images',
+        label: 'Purge Unused TMDB Images',
+        description: 'Remove TMDB images not linked to any local metadata records.',
+        fn: actionsApi.purgeAllUnusedTmdbImages,
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Purge unused TMDB images?',
+      },
+      {
+        id: 'purge-unused-tmdb-shows',
+        label: 'Purge Unused TMDB Shows',
+        description: 'Remove TMDB show records that are not linked to local media.',
+        fn: actionsApi.purgeAllUnusedTmdbShows,
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Purge unused TMDB show records? Local media files are not deleted.',
+      },
+      {
+        id: 'purge-tmdb-orderings',
+        label: 'Purge TMDB Show Alternate Orderings',
+        description: 'Remove cached alternate ordering data for TMDB shows.',
+        fn: actionsApi.purgeAllTmdbShowAlternateOrderings,
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Purge all TMDB show alternate ordering records?',
+      },
+      {
+        id: 'purge-tmdb-links',
+        label: 'Purge TMDB Links',
+        description: 'Remove all local TMDB links and reset auto-linking state.',
+        fn: () => actionsApi.purgeAllTmdbLinks(true, true, true),
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Remove all TMDB movie and show links and reset auto-linking state?',
+      },
+      {
+        id: 'purge-used-releases',
+        label: 'Purge Used Releases',
+        description: 'Clear selected release associations from known videos.',
+        fn: () => actionsApi.purgeAllUsedReleases(true),
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Purge used release associations from known videos?',
+      },
+      {
+        id: 'purge-unused-releases',
+        label: 'Purge Unused Releases',
+        description: 'Remove release records not linked to any known videos.',
+        fn: () => actionsApi.purgeAllUnusedReleases(true),
+        scope: 'admin',
+        destructive: true,
+        confirmation: 'Purge unused release records?',
       },
     ],
   },
@@ -113,79 +233,158 @@ const ACTION_GROUPS: { title: string; actions: ActionDef[] }[] = [
 
 export default function Actions() {
   const navigate = useNavigate();
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [running, setRunning] = useState<Record<string, boolean>>({});
   const [results, setResults] = useState<Record<string, 'ok' | 'error'>>({});
   const [errorMessages, setErrorMessages] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    let stopped = false;
+    usersApi.current()
+      .then(user => { if (!stopped) setCurrentUser(user); })
+      .catch(err => {
+        if (err instanceof ApiError && err.status === 401) navigate('/login');
+      });
+    return () => { stopped = true; };
+  }, [navigate]);
+
   async function run(action: ActionDef) {
-    setRunning(r => ({ ...r, [action.id]: true }));
-    setResults(r => { const n = { ...r }; delete n[action.id]; return n; });
-    setErrorMessages(r => { const n = { ...r }; delete n[action.id]; return n; });
+    if (action.scope === 'admin' && currentUser?.IsAdmin === false) {
+      setResults(result => ({ ...result, [action.id]: 'error' }));
+      setErrorMessages(result => ({ ...result, [action.id]: 'Admin permission required.' }));
+      return;
+    }
+    if (action.confirmation && !window.confirm(action.confirmation)) return;
+
+    setRunning(result => ({ ...result, [action.id]: true }));
+    setResults(result => {
+      const next = { ...result };
+      delete next[action.id];
+      return next;
+    });
+    setErrorMessages(result => {
+      const next = { ...result };
+      delete next[action.id];
+      return next;
+    });
     try {
       await action.fn();
-      setResults(r => ({ ...r, [action.id]: 'ok' }));
+      setResults(result => ({ ...result, [action.id]: 'ok' }));
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) {
         navigate('/login');
         return;
       }
-      setResults(r => ({ ...r, [action.id]: 'error' }));
-      setErrorMessages(r => ({ ...r, [action.id]: err instanceof Error ? err.message : 'Action failed.' }));
+      setResults(result => ({ ...result, [action.id]: 'error' }));
+      setErrorMessages(result => ({ ...result, [action.id]: err instanceof Error ? err.message : 'Action failed.' }));
     } finally {
-      setRunning(r => ({ ...r, [action.id]: false }));
+      setRunning(result => ({ ...result, [action.id]: false }));
     }
   }
 
   return (
-    <div className="mx-auto max-w-4xl px-6 py-8 space-y-6">
-      <h1 className="text-xl font-semibold text-white">Actions</h1>
-
-      {ACTION_GROUPS.map(group => (
-        <div key={group.title} className="app-card rounded-md">
-          <div className="border-b border-gray-700/50 px-5 py-3">
-            <h2 className="text-sm font-semibold text-gray-200">{group.title}</h2>
-          </div>
-          <ul className="divide-y divide-gray-800/50">
-            {group.actions.map(action => (
-              <li key={action.id} className="flex items-center gap-4 px-5 py-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-gray-100">{action.label}</p>
-                    {action.destructive && (
-                      <AlertTriangle size={12} className="text-yellow-500 shrink-0" />
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5">{action.description}</p>
-                  {results[action.id] === 'error' && (
-                    <p className="text-xs text-red-400 mt-1">{errorMessages[action.id]}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  {results[action.id] === 'ok' && (
-                    <span className="text-xs text-green-400">Queued</span>
-                  )}
-                  <button
-                    disabled={running[action.id]}
-                    onClick={() => run(action)}
-                    className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs transition-colors disabled:opacity-50 ${
-                      action.destructive
-                        ? 'bg-red-700/60 hover:bg-red-600/80 text-red-100'
-                        : 'bg-blue-600 hover:bg-blue-500 text-white'
-                    }`}
-                  >
-                    {running[action.id] ? (
-                      <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
-                    ) : (
-                      <Play size={11} />
-                    )}
-                    Run
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+    <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold text-white">Actions</h1>
+          <p className="mt-1 text-sm text-gray-500">Queue server maintenance jobs against files already managed by DaCollector.</p>
         </div>
-      ))}
+        <div className="inline-flex items-center gap-2 rounded-md border border-gray-700/50 bg-gray-900/40 px-3 py-2 text-xs text-gray-400">
+          {currentUser?.IsAdmin ? <ShieldCheck size={14} className="text-emerald-400" /> : <ShieldAlert size={14} className="text-yellow-400" />}
+          {currentUser?.IsAdmin ? 'Admin session' : 'User session'}
+        </div>
+      </div>
+
+      <div className="mt-6 space-y-6">
+        {ACTION_GROUPS.map(group => (
+          <ActionGroupPanel
+            key={group.title}
+            group={group}
+            isAdmin={Boolean(currentUser?.IsAdmin)}
+            running={running}
+            results={results}
+            errorMessages={errorMessages}
+            onRun={run}
+          />
+        ))}
+      </div>
     </div>
+  );
+}
+
+function ActionGroupPanel({
+  group,
+  isAdmin,
+  running,
+  results,
+  errorMessages,
+  onRun,
+}: {
+  group: ActionGroup;
+  isAdmin: boolean;
+  running: Record<string, boolean>;
+  results: Record<string, 'ok' | 'error'>;
+  errorMessages: Record<string, string>;
+  onRun: (action: ActionDef) => void;
+}) {
+  const adminGroup = group.scope === 'admin';
+  return (
+    <section className={`rounded-md border bg-gray-900/40 ${adminGroup ? 'border-yellow-700/50' : 'border-gray-700/50'}`}>
+      <div className="flex flex-col gap-2 border-b border-gray-700/50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
+          {adminGroup ? <ShieldAlert size={15} className="text-yellow-400" /> : <Play size={15} className="text-gray-400" />}
+          <h2 className="text-sm font-semibold text-gray-200">{group.title}</h2>
+        </div>
+        {adminGroup && (
+          <span className="text-xs text-yellow-400">Admin only</span>
+        )}
+      </div>
+      <ul className="divide-y divide-gray-800/70">
+        {group.actions.map(action => {
+          const disabled = running[action.id] || (action.scope === 'admin' && !isAdmin);
+          return (
+            <li key={action.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-center">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-medium text-gray-100">{action.label}</p>
+                  {action.scope === 'admin' && <span className="rounded bg-yellow-900/40 px-2 py-0.5 text-[11px] text-yellow-300">Admin</span>}
+                  {action.destructive && <AlertTriangle size={13} className="text-red-400" />}
+                </div>
+                <p className="mt-1 text-sm text-gray-500">{action.description}</p>
+                {results[action.id] === 'error' && (
+                  <p className="mt-2 text-xs text-red-400">{errorMessages[action.id]}</p>
+                )}
+              </div>
+              <div className="flex shrink-0 items-center gap-3">
+                {results[action.id] === 'ok' && (
+                  <span className="inline-flex items-center gap-1 text-xs text-emerald-400">
+                    <CheckCircle2 size={13} />
+                    Queued
+                  </span>
+                )}
+                <button
+                  disabled={disabled}
+                  onClick={() => onRun(action)}
+                  className={`inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                    action.destructive
+                      ? 'border-red-500/70 bg-red-600 text-white hover:bg-red-500'
+                      : action.scope === 'admin'
+                        ? 'border-yellow-600/70 bg-yellow-900/50 text-yellow-100 hover:border-yellow-500'
+                        : 'border-blue-500/80 bg-blue-600 text-white hover:bg-blue-500'
+                  }`}
+                >
+                  {running[action.id] ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                  ) : (
+                    <Play size={13} />
+                  )}
+                  Run
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

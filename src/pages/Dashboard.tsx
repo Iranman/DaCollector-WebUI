@@ -532,7 +532,9 @@ function QueueWidget({ queue, connState }: { queue: QueueStatus | null; connStat
             <li key={item.Key} className="flex items-center justify-between gap-4 px-5 py-2.5">
               <div className="min-w-0">
                 <p className="truncate text-sm text-gray-200">{item.Title}</p>
-                {item.Details && <p className="truncate text-xs text-gray-500">{item.Details}</p>}
+                {formatQueueDetails(item.Details) && (
+                  <p className="truncate text-xs text-gray-500">{formatQueueDetails(item.Details)}</p>
+                )}
               </div>
               <span className="shrink-0 text-xs text-gray-500">{item.Type}</span>
             </li>
@@ -546,4 +548,22 @@ function QueueWidget({ queue, connState }: { queue: QueueStatus | null; connStat
       )}
     </div>
   );
+}
+
+function formatQueueDetails(details: Record<string, unknown> | undefined) {
+  if (!details) return '';
+  return Object.entries(details)
+    .map(([key, value]) => `${key}: ${formatQueueValue(value)}`)
+    .join(' · ');
+}
+
+function formatQueueValue(value: unknown) {
+  if (value == null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
 }
