@@ -25,19 +25,30 @@ async function writeVersionFile(debug: boolean) {
   const pkg = JSON.parse(await readFile('./package.json', 'utf8')) as { version?: string };
   const packageVersion = sanitizeVersion(pkg.version ?? '0.0.0');
   const minimumServerVersion = sanitizeVersion(process.env.DACOLLECTOR_MIN_SERVER_VERSION ?? '1.0.0');
-  const gitHash = readGitHash();
+  const gitHash = readMetadataValue('DACOLLECTOR_WEBUI_GIT', () => readGitValue('rev-parse HEAD'));
+  const date = readMetadataValue('DACOLLECTOR_WEBUI_DATE', () => readGitValue('show -s --date=format-local:%Y-%m-%dT%H:%M:%SZ --format=%cd HEAD'));
+  const tag = readMetadataValue('DACOLLECTOR_WEBUI_TAG', () => `v${packageVersion}`);
+  const channel = readMetadataValue('DACOLLECTOR_WEBUI_CHANNEL', () => debug ? 'Debug' : 'Stable');
 
   await writeFile('./public/version.json', JSON.stringify({
-    git: gitHash,
     package: packageVersion,
     minimumServerVersion,
+    tag,
+    git: gitHash,
+    date,
+    channel,
     debug,
   }, null, '  '), 'utf8');
 }
 
-function readGitHash() {
+function readMetadataValue(envName: string, fallback: () => string) {
+  const value = process.env[envName]?.trim();
+  return value || fallback();
+}
+
+function readGitValue(args: string) {
   try {
-    return childProcess.execSync('git log --pretty=format:%h -n 1').toString().trim();
+    return childProcess.execSync(`git ${args}`).toString().trim();
   } catch {
     return 'unknown';
   }

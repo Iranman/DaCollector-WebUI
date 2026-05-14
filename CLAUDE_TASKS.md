@@ -939,10 +939,29 @@ Verification evidence for P21-P28:
 - `rg -n "window\.confirm" src` returns no code hits.
 - The temporary same-origin screenshot auth helper was removed after capture and is not part of the finished worktree.
 
+## P29 — Server-Compatible WebUI Metadata — DONE
+
+Goal:
+- Make the WebUI build metadata independently useful for bundled Server deployment and update comparison.
+
+Tasks:
+- Keep `public/version.json` generated at build time and out of source control.
+- Emit the richer server-compatible fields the Server already understands: package version, minimum server version, release tag, full git SHA, release date, channel, and debug flag.
+- Allow CI/Docker callers to override metadata with environment variables while preserving local defaults.
+
+Acceptance criteria:
+- `npm run build` passes.
+- Generated `public/version.json` uses a full WebUI commit SHA, ISO-like date, `Stable`/`Debug` channel, and sanitized semver values.
+- The browser-only WebUI repo does not take over Docker packaging; Server remains responsible for embedding the WebUI into the container image.
+
+Implementation notes:
+- `vite.config.ts` now writes `tag`, full `git`, `date`, `channel`, and `debug` fields in addition to `package` and `minimumServerVersion`.
+- Metadata overrides are supported through `DACOLLECTOR_WEBUI_GIT`, `DACOLLECTOR_WEBUI_DATE`, `DACOLLECTOR_WEBUI_TAG`, `DACOLLECTOR_WEBUI_CHANNEL`, and `DACOLLECTOR_MIN_SERVER_VERSION`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick the next backlog from the current parity audit or create P29+ before coding.
+1. Pick the next backlog from the current parity audit or create P30+ before coding.
 
 Important:
 - Do not start by changing backend code.
