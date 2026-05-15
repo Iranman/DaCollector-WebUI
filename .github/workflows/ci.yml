@@ -39,8 +39,8 @@ jobs:
           WEBUI_SHA: ${{ github.sha }}
         run: |
           if [ -z "$SERVER_DISPATCH_TOKEN" ]; then
-            echo "::error::DACOLLECTOR_SERVER_DISPATCH_TOKEN is not configured. Add a fine-grained token that can dispatch workflows in Iranman/DaCollector so ghcr.io/iranman/dacollector:latest is rebuilt with this WebUI."
-            exit 1
+            echo "::warning::DACOLLECTOR_SERVER_DISPATCH_TOKEN is not configured. Skipping server Docker image rebuild."
+            exit 0
           fi
 
           curl -fsSL \
