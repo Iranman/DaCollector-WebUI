@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -6,6 +6,7 @@ import {
   Ban,
   CheckCircle2,
   Clock3,
+  Fingerprint,
   Info,
   Pause,
   Play,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import { queueApi, QueueItem, QueueStatus } from '../api/queue';
 import { ApiError } from '../api/client';
+import { hashingApi, HashingSummary, HashProvider } from '../api/hashing';
 import { buildConnection } from '../lib/signalr';
 import { useConfirm } from '../components/ui/ConfirmProvider';
 import { useToast } from '../components/ui/ToastProvider';
@@ -39,6 +41,32 @@ export default function Utilities() {
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [connState, setConnState] = useState<ConnState>('connecting');
+  const [hashingSummary, setHashingSummary] = useState<HashingSummary | null>(null);
+  const [hashProviders, setHashProviders] = useState<HashProvider[]>([]);
+  const [hashingLoading, setHashingLoading] = useState(true);
+  const [hashingError, setHashingError] = useState<string | null>(null);
+
+  const loadHashing = useCallback(async (showLoader = true) => {
+    try {
+      if (showLoader) setHashingLoading(true);
+      const [summary, providers] = await Promise.all([
+        hashingApi.summary(),
+        hashingApi.providers(),
+      ]);
+      setHashingSummary(summary);
+      setHashProviders(providers);
+      setHashingError(null);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) navigate('/login');
+      else setHashingError(err instanceof Error ? err.message : 'Failed to load hashing status.');
+    } finally {
+      if (showLoader) setHashingLoading(false);
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    void loadHashing();
+  }, [loadHashing]);
 
   useEffect(() => {
     let stopped = false;
@@ -123,11 +151,13 @@ export default function Utilities() {
   async function handleRefresh() {
     try {
       setLoading(true);
+      const hashingRefresh = loadHashing(false);
       const [queueStatus, itemResult, typeResult] = await Promise.all([
         queueApi.get(),
         queueApi.getItems({ page: 1, pageSize: 250, showAll: true }),
         queueApi.getTypes(),
       ]);
+      await hashingRefresh;
       setStatus(queueStatus);
       setItems(itemResult.List);
       setTypes(typeResult);
@@ -320,11 +350,117 @@ export default function Utilities() {
             </div>
           </div>
 
+          <HashingPanel
+            error={hashingError}
+            loading={hashingLoading}
+            providers={hashProviders}
+            summary={hashingSummary}
+          />
+
           <JobDetails item={selected} />
         </aside>
       </div>
     </div>
   );
+}
+
+function HashingPanel({
+  error,
+  loading,
+  providers,
+  summary,
+}: {
+  error: string | null;
+  loading: boolean;
+  providers: HashProvider[];
+  summary: HashingSummary | null;
+}) {
+  return (
+    <div className="rounded-md border border-gray-700/50 bg-gray-900/40">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-700/50 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Fingerprint size={15} className="text-blue-400" />
+          <h2 className="text-sm font-semibold text-gray-200">Hashing Status</h2>
+        </div>
+        {loading && <RefreshCw size={13} className="animate-spin text-gray-500" />}
+      </div>
+
+      {error ? (
+        <div className="px-4 py-4 text-sm text-red-300">{error}</div>
+      ) : loading && !summary ? (
+        <div className="px-4 py-8 text-center text-sm text-gray-500">Loading hashing status...</div>
+      ) : (
+        <div className="space-y-4 p-4">
+          <div className="grid grid-cols-2 gap-3">
+            <MiniMetric label="Mode" value={summary?.ParallelMode ? 'Parallel' : 'Serial'} />
+            <MiniMetric label="Providers" value={summary?.ProviderCount ?? providers.length} />
+            <MiniMetric label="Enabled Types" value={summary?.AllEnabledHashTypes.length ?? 0} />
+            <MiniMetric label="Available Types" value={summary?.AllAvailableHashTypes.length ?? 0} />
+          </div>
+
+          <div>
+            <p className="text-xs uppercase tracking-wide text-gray-500">Enabled hashes</p>
+            <HashTypeList types={summary?.AllEnabledHashTypes ?? []} emptyText="No hash types are enabled." />
+          </div>
+
+          <div>
+            <p className="text-xs uppercase tracking-wide text-gray-500">Providers</p>
+            {providers.length === 0 ? (
+              <p className="mt-2 text-sm text-gray-500">No hash providers are currently registered.</p>
+            ) : (
+              <div className="mt-2 space-y-2">
+                {providers.map(provider => (
+                  <div key={provider.ID} className="rounded-md border border-gray-800/80 bg-black/20 px-3 py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-gray-100">{provider.Name}</p>
+                        <p className="mt-0.5 truncate text-xs text-gray-500">{provider.Plugin?.Name ?? 'Core'} · v{formatVersion(provider.Version)}</p>
+                      </div>
+                      <StatusPill label={`${provider.EnabledHashTypes.length}/${provider.AvailableHashTypes.length}`} tone={provider.EnabledHashTypes.length > 0 ? 'blue' : 'yellow'} />
+                    </div>
+                    {provider.Description && <p className="mt-2 line-clamp-2 text-xs text-gray-500">{provider.Description}</p>}
+                    <div className="mt-2">
+                      <HashTypeList types={provider.EnabledHashTypes} emptyText="Disabled" compact />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniMetric({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-md border border-gray-800/80 bg-black/20 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-gray-100">{value}</p>
+    </div>
+  );
+}
+
+function HashTypeList({ compact, emptyText, types }: { compact?: boolean; emptyText: string; types: string[] }) {
+  if (types.length === 0) {
+    return <p className="mt-2 text-xs text-gray-500">{emptyText}</p>;
+  }
+  return (
+    <div className={`mt-2 flex flex-wrap gap-1.5 ${compact ? '' : 'gap-y-2'}`}>
+      {types.map(type => (
+        <span key={type} className="rounded border border-gray-700/60 bg-gray-950/60 px-2 py-0.5 text-[11px] uppercase tracking-wide text-gray-300">
+          {type}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function formatVersion(value: HashProvider['Version']) {
+  if (typeof value === 'string') return value;
+  const parts = [value.Major, value.Minor, value.Build, value.Revision].filter(part => part != null && part >= 0);
+  return parts.length > 0 ? parts.join('.') : 'unknown';
 }
 
 function ConnectionBadge({ state }: { state: ConnState }) {

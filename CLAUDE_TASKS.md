@@ -1076,10 +1076,39 @@ Verification evidence:
 - Authenticated DashboardController smoke returned HTTP 200 for `/Stats`, `/SeriesSummary`, `/TopTags`, `/RecentlyAddedEpisodes`, `/RecentlyAddedSeries`, `/ContinueWatchingEpisodes`, and `/NextUpEpisodes`.
 - Headless Chrome rendered the new dashboard panels and captured desktop/mobile screenshots in `docs/verification/p33/`.
 
+## P34 — HashingController Status Coverage — DONE
+
+Goal:
+- Surface the existing read-only `HashingController` status endpoints in the React WebUI without moving hashing behavior into the browser.
+
+Audit findings:
+- Server exposes `/api/v3/Hashing/Summary`, `/Hashing/Provider`, and `/Hashing/Provider/{providerID}` as read-only endpoints.
+- Server also exposes admin write endpoints for hashing settings and provider enablement, but those are intentionally out of scope for this slice.
+- Before this slice, WebUI had a generic Settings > Hashing configuration metadata view, but no live hashing service summary/provider status.
+
+Tasks:
+- Add a typed `src/api/hashing.ts` client for read-only hashing summary and provider endpoints.
+- Add a Utilities hashing status panel that shows parallel mode, provider count, enabled/available hash types, and provider health.
+- Keep hashing actions server-owned; do not add browser-side hashing, provider mutations, or file operations.
+
+Acceptance criteria:
+- `npm run build` passes.
+- Utilities still loads queue status and controls as before.
+- Hashing status degrades to a panel-local error state if the hashing endpoints fail.
+- Container route/API smoke confirms `/webui/utilities`, `/api/v3/Hashing/Summary`, and `/api/v3/Hashing/Provider`.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-15 with only the existing Vite/PostCSS/SignalR/chunk-size warnings.
+- `git diff --check` passed for `src/api/hashing.ts`, `src/pages/Utilities.tsx`, and this task file with only CRLF conversion notices.
+- Temporary container `dacollector-p34` served the freshly built local `dist` from `/app/webui` on `http://127.0.0.1:38114/webui`.
+- Container route smoke returned HTTP 200 for `/webui/utilities`, `/webui/dashboard`, and `/webui/version.json`.
+- Authenticated smoke returned HTTP 200 for `/api/v3/Hashing/Summary`, `/api/v3/Hashing/Provider`, and `/api/v3/Queue`.
+- Headless Chrome rendered the new Utilities hashing panel and captured desktop/mobile screenshots in `docs/verification/p34/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick P34 from remaining unsurfaced API/routes.
+1. Pick P35 from remaining unsurfaced API/routes.
 
 Important:
 - Do not start by changing backend code.
