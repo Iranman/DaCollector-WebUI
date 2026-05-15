@@ -1135,10 +1135,40 @@ Verification evidence:
 - Authenticated smoke returned HTTP 200 for `/api/v3/Database/Backups` and `/api/v3/Configuration?query=database`.
 - Headless Chrome rendered the Settings > Database backup panel and captured desktop/mobile screenshots in `docs/verification/p35/`.
 
+## P36 — ReleaseInfoController Status Coverage — DONE
+
+Goal:
+- Surface the existing read-only release metadata provider status in Settings > Release Info without moving release lookup, preview, provider mutation, or file release behavior into the browser.
+
+Audit findings:
+- Server exposes `GET /api/v3/ReleaseInfo/Summary` and `GET /api/v3/ReleaseInfo/Provider` for release metadata service/provider status.
+- Server also exposes release provider settings, provider updates, release preview, file release save/delete, and stored release list endpoints; mutation and file-scoped release workflows are intentionally out of scope for this slice.
+- Before this slice, Settings > Release Info only showed generic configuration metadata through `ConfigurationController`.
+
+Tasks:
+- Add a typed `src/api/releaseInfo.ts` client for the read-only summary and provider endpoints.
+- Add a read-only release provider panel to Settings > Release Info.
+- Preserve existing release/parser configuration metadata and validation cards in Settings > Release Info.
+- Show a clear panel-local message if release provider status cannot be loaded.
+
+Acceptance criteria:
+- `npm run build` passes.
+- `/settings/release-info` still renders the existing configuration metadata.
+- Release providers are displayed with name, plugin, version, enabled state, priority, and configuration status when the endpoints succeed.
+- Container route/API smoke confirms `/webui/settings/release-info`, `/api/v3/ReleaseInfo/Summary`, and `/api/v3/ReleaseInfo/Provider`.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-15 with only the existing Vite/PostCSS/SignalR/chunk-size warnings.
+- `git diff --check` passed for `src/api/releaseInfo.ts`, `src/pages/Settings.tsx`, and this task file with only CRLF conversion notices.
+- Temporary container `dacollector-p36` served the freshly built local `dist` from `/app/webui` on `http://127.0.0.1:38116/webui`.
+- Container route smoke returned HTTP 200 for `/webui/settings/release-info`, `/webui/settings/general`, and `/webui/version.json`.
+- Authenticated smoke returned HTTP 200 for `/api/v3/ReleaseInfo/Summary`, `/api/v3/ReleaseInfo/Provider`, and `/api/v3/Configuration?query=release`.
+- Chrome rendered the Settings > Release Info provider panel and captured desktop/mobile screenshots in `docs/verification/p36/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick P36 from remaining unsurfaced API/routes.
+1. Pick P37 from remaining unsurfaced API/routes.
 
 Important:
 - Do not start by changing backend code.

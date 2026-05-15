@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Archive, Check, Image as ImageIcon, KeyRound, Link2, Palette, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { Archive, Check, Info, Image as ImageIcon, KeyRound, Link2, Palette, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { ApiError } from '../api/client';
 import { configurationApi, ConfigurationInfo } from '../api/configuration';
 import { databaseApi, DatabaseBackupFile } from '../api/database';
 import { ComponentVersion, ComponentVersionSet, initApi } from '../api/init';
+import { releaseInfoApi, ReleaseInfoProvider, ReleaseInfoSummary } from '../api/releaseInfo';
 import { settingsApi, ServerSettings } from '../api/settings';
 import { tagsApi, Tag } from '../api/tags';
 import { ApiToken, tokensApi } from '../api/tokens';
@@ -333,11 +334,7 @@ export default function Settings() {
                 />
               )}
               {activeSection === 'release-info' && (
-                <ConfigurationSummarySection
-                  title="Release Info"
-                  description="Review release parser and release metadata configuration that the server exposes."
-                  queries={['release', 'parser']}
-                />
+                <ReleaseInfoSection />
               )}
               {activeSection === 'relocation' && (
                 <ConfigurationSummarySection
@@ -1689,6 +1686,149 @@ function ReadonlyValue({ loading, value }: { loading: boolean; value: string }) 
       {loading ? 'Checking...' : value}
     </div>
   );
+}
+
+function ReleaseInfoSection() {
+  return (
+    <div className="space-y-7">
+      <SectionHeader
+        title="Release Info"
+        description="Review release metadata provider status and release-related server configuration."
+      />
+      <ReleaseInfoProvidersPanel />
+      <ConfigurationSummarySection
+        title="Release Info"
+        description="Review release parser and release metadata configuration that the server exposes."
+        queries={['release', 'parser']}
+        showHeader={false}
+      />
+    </div>
+  );
+}
+
+function ReleaseInfoProvidersPanel() {
+  const [summary, setSummary] = useState<ReleaseInfoSummary | null>(null);
+  const [providers, setProviders] = useState<ReleaseInfoProvider[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadReleaseInfo() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [summaryResult, providerResult] = await Promise.all([
+        releaseInfoApi.summary(),
+        releaseInfoApi.providers(),
+      ]);
+      setSummary(summaryResult);
+      setProviders([...providerResult].sort((a, b) => a.Priority - b.Priority || a.Name.localeCompare(b.Name)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load release provider status.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadReleaseInfo();
+  }, []);
+
+  const enabledCount = providers.filter(provider => provider.IsEnabled).length;
+  const configuredCount = providers.filter(provider => Boolean(provider.Configuration)).length;
+
+  return (
+    <SettingGroup title="Release Providers">
+      <div className="rounded-md border border-gray-800/70 bg-gray-950/40">
+        <div className="flex flex-col gap-3 border-b border-gray-800/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Info size={16} className="text-blue-400" />
+            <div>
+              <div className="text-sm font-medium text-gray-100">Release metadata providers</div>
+              <div className="text-xs text-gray-500">Read-only service status from ReleaseInfoController.</div>
+            </div>
+          </div>
+          <Button size="sm" variant="secondary" onClick={loadReleaseInfo} disabled={loading}>
+            <RefreshCw size={13} className={loading ? 'mr-1.5 animate-spin' : 'mr-1.5'} />
+            Refresh
+          </Button>
+        </div>
+
+        {error ? (
+          <div className="px-4 py-4 text-sm text-yellow-200">{error}</div>
+        ) : loading && !summary ? (
+          <InlineSpinner />
+        ) : (
+          <div>
+            <div className="grid gap-3 border-b border-gray-800/70 p-4 sm:grid-cols-4">
+              <BackupStat label="Mode" value={summary?.ParallelMode ? 'Parallel' : 'Serial'} />
+              <BackupStat label="Providers" value={summary?.ProviderCount ?? providers.length} />
+              <BackupStat label="Enabled" value={enabledCount} />
+              <BackupStat label="Configured" value={configuredCount} />
+            </div>
+
+            {providers.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-gray-500">No release metadata providers are currently registered.</div>
+            ) : (
+              <div className="divide-y divide-gray-800/70">
+                {providers.map(provider => (
+                  <div key={provider.ID} className="px-4 py-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="break-words text-sm font-medium text-gray-100">{provider.Name}</span>
+                          <ReleaseProviderPill tone={provider.IsEnabled ? 'blue' : 'yellow'}>
+                            {provider.IsEnabled ? 'Enabled' : 'Disabled'}
+                          </ReleaseProviderPill>
+                          <ReleaseProviderPill tone="gray">Priority {provider.Priority}</ReleaseProviderPill>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {provider.Plugin?.Name ?? 'Core'} · v{formatReleaseVersion(provider.Version)}
+                        </p>
+                        {provider.Description && (
+                          <p className="mt-2 line-clamp-2 text-xs text-gray-400">{provider.Description}</p>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-1.5">
+                        {provider.Configuration && <InfoPill>Configuration</InfoPill>}
+                        {provider.Plugin?.RestartPending && <InfoPill>Restart Pending</InfoPill>}
+                        {provider.Plugin?.IsActive === false && <InfoPill>Inactive Plugin</InfoPill>}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </SettingGroup>
+  );
+}
+
+function ReleaseProviderPill({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: 'blue' | 'gray' | 'yellow';
+}) {
+  const cls = {
+    blue: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
+    gray: 'border-gray-700/70 bg-gray-900/80 text-gray-400',
+    yellow: 'border-yellow-500/40 bg-yellow-950/30 text-yellow-200',
+  }[tone];
+  return (
+    <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}>
+      {children}
+    </span>
+  );
+}
+
+function formatReleaseVersion(value: ReleaseInfoProvider['Version']) {
+  if (typeof value === 'string') return value;
+  const parts = [value.Major, value.Minor, value.Build, value.Revision]
+    .filter((part): part is number => typeof part === 'number' && part >= 0);
+  return parts.length > 0 ? parts.join('.') : 'unknown';
 }
 
 function DatabaseSection() {
