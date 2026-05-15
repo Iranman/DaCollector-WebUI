@@ -1018,10 +1018,38 @@ Verification evidence:
 - Route smoke returned HTTP 200 for `/webui/setup`, `/webui/login`, `/webui/dashboard`, `/webui/settings/web-ui`, `/webui/files`, `/webui/utilities`, and `/webui/version.json`.
 - Screenshot evidence is in `docs/verification/p31/`.
 
+## P32 — Route Fallback and Error Boundary Parity — DONE
+
+Goal:
+- Add Shoko-style route resilience without importing Sentry or changing the current React/Vite stack.
+
+Tasks:
+- Add a global render error boundary around the routed WebUI surface.
+- Reset the error boundary when the user navigates to a different route.
+- Add a branded unsupported-route page for authenticated unknown routes instead of silently redirecting ready users to Dashboard.
+- Keep setup/login redirects intact for unauthenticated or first-run sessions.
+
+Acceptance criteria:
+- Render failures show a branded fallback with reload, Dashboard, and copy-diagnostics actions.
+- Unknown authenticated routes show an unsupported-route page inside the main app shell.
+- No backend behavior, filesystem access, package-manager change, Sentry dependency, Redux, or React Query is introduced.
+- `npm run build` passes.
+
+Implementation notes:
+- Added `src/components/AppErrorBoundary.tsx` with route-key reset behavior and copyable diagnostic details.
+- Added `src/pages/Unsupported.tsx` for unknown authenticated routes.
+- Moved the route tree into an `AppRoutes` helper so it can read the current location and reset the boundary on navigation.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-15 with only the existing Vite/PostCSS/SignalR/chunk-size warnings.
+- `git diff --check` passed for `src/components/AppErrorBoundary.tsx`, `src/pages/Unsupported.tsx`, `src/App.tsx`, and this task file with only existing CRLF conversion notices.
+- Temporary Vite route smoke at `http://127.0.0.1:5180` returned HTTP 200 for `/webui/not-a-real-route-p32`, `/webui/dashboard`, and `/webui/login`.
+- Headless Chrome rendered the authenticated unsupported-route page and captured desktop/mobile screenshots in `docs/verification/p32/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Finish P31, then pick the next backlog from the current parity audit or create P32+ before coding.
+1. Pick P33 from a fresh route/API/backlog audit before coding.
 
 Important:
 - Do not start by changing backend code.
