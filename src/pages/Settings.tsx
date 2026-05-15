@@ -5,6 +5,7 @@ import { ApiError } from '../api/client';
 import { configurationApi, ConfigurationInfo } from '../api/configuration';
 import { databaseApi, DatabaseBackupFile } from '../api/database';
 import { ComponentVersion, ComponentVersionSet, initApi } from '../api/init';
+import { managedFoldersApi, ManagedFolder, CreateManagedFolderBody } from '../api/managedFolders';
 import { releaseInfoApi, ReleaseInfoProvider, ReleaseInfoSummary } from '../api/releaseInfo';
 import { settingsApi, ServerSettings } from '../api/settings';
 import { tagsApi, Tag } from '../api/tags';
@@ -370,12 +371,42 @@ function GeneralSection({
 }: {
   settings: ServerSettings;
 }) {
+  const confirm = useConfirm();
+  const { notify } = useToast();
+  const [resetting, setResetting] = useState(false);
+
+  async function handleRestoreSetup() {
+    const ok = await confirm({
+      title: 'Restore Setup Wizard',
+      message: 'This will restart the server into setup mode. You will be redirected to the setup wizard on next load. Continue?',
+      confirmLabel: 'Restore & Restart',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    setResetting(true);
+    try {
+      await initApi.resetSetup();
+      notify({ message: 'Server is restarting into setup mode…', tone: 'info' });
+    } catch (err) {
+      notify({ message: err instanceof Error ? err.message : 'Reset failed.', title: 'Reset failed', tone: 'error' });
+    } finally {
+      setResetting(false);
+    }
+  }
+
   return (
     <div className="space-y-7">
       <SectionHeader title="General" description="Here you can find settings for version details, theme customization, notification management, and log configurations." />
       <SettingGroup title="Database Settings">
         <SettingsRow label="Database Type">
           <TextInput value={settings.Database?.Type ?? 'SQLite'} readOnly />
+        </SettingsRow>
+      </SettingGroup>
+      <SettingGroup title="Setup">
+        <SettingsRow label="Restore Setup Wizard" description="Reset the server back to first-run setup mode and restart. Use this if initial setup was skipped or needs to be re-run.">
+          <Button variant="destructive" size="sm" onClick={() => void handleRestoreSetup()} disabled={resetting}>
+            {resetting ? 'Restarting…' : 'Restore'}
+          </Button>
         </SettingsRow>
       </SettingGroup>
     </div>
@@ -400,7 +431,105 @@ function ImportSection({
           <TextInput type="number" min={0} value={settings.Import?.MaxAutoScanAttemptsPerFile ?? 15} onChange={e => updateSetting(['Import', 'MaxAutoScanAttemptsPerFile'], Number(e.target.value))} />
         </SettingsRow>
       </SettingGroup>
+      <ManagedFolderQuickAdd />
     </div>
+  );
+}
+
+function ManagedFolderQuickAdd() {
+  const { notify } = useToast();
+  const [folders, setFolders] = useState<ManagedFolder[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [newPath, setNewPath] = useState('');
+  const [newName, setNewName] = useState('');
+  const [watchForNew, setWatchForNew] = useState(true);
+
+  useEffect(() => {
+    managedFoldersApi.list()
+      .then(setFolders)
+      .catch(err => setLoadError(err instanceof Error ? err.message : 'Failed to load folders.'));
+  }, []);
+
+  async function handleAdd() {
+    const path = newPath.trim();
+    if (!path) {
+      setAddError('Path is required.');
+      return;
+    }
+    setAdding(true);
+    setAddError(null);
+    try {
+      const body: CreateManagedFolderBody = {
+        Name: newName.trim() || path.split(/[\\/]/).filter(Boolean).pop() ?? path,
+        Path: path,
+        WatchForNewFiles: watchForNew,
+        DropFolderType: 'None',
+      };
+      const created = await managedFoldersApi.create(body);
+      setFolders(prev => [...prev, created]);
+      setNewPath('');
+      setNewName('');
+      setWatchForNew(true);
+      setShowForm(false);
+      notify({ message: `Import folder "${created.Name}" added.`, tone: 'success' });
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Failed to add folder.');
+    } finally {
+      setAdding(false);
+    }
+  }
+
+  return (
+    <SettingGroup title="Import Folders">
+      {loadError && <Alert tone="error">{loadError}</Alert>}
+      {folders.length === 0 && !loadError && (
+        <p className="px-1 py-2 text-sm text-gray-500">No import folders configured yet.</p>
+      )}
+      {folders.map(f => (
+        <SettingsRow key={f.ID} label={f.Name}>
+          <span className="truncate text-right text-xs text-gray-400" title={f.Path}>{f.Path}</span>
+        </SettingsRow>
+      ))}
+      {showForm ? (
+        <div className="space-y-3 rounded-md border border-gray-700/60 bg-gray-900/40 p-4">
+          {addError && <Alert tone="error">{addError}</Alert>}
+          <SettingsRow label="Path">
+            <TextInput
+              value={newPath}
+              onChange={e => setNewPath(e.target.value)}
+              placeholder="/media/movies"
+              autoFocus
+            />
+          </SettingsRow>
+          <SettingsRow label="Name (optional)">
+            <TextInput
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              placeholder="Auto-detected from path"
+            />
+          </SettingsRow>
+          <SettingsRow label="Watch for New Files">
+            <Toggle checked={watchForNew} onChange={setWatchForNew} />
+          </SettingsRow>
+          <div className="flex justify-end gap-2 pt-1">
+            <Button variant="secondary" size="sm" onClick={() => { setShowForm(false); setAddError(null); setNewPath(''); setNewName(''); }}>Cancel</Button>
+            <Button size="sm" disabled={adding} onClick={() => void handleAdd()}>
+              {adding ? 'Adding…' : 'Add Folder'}
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="pt-1">
+          <Button variant="secondary" size="sm" onClick={() => setShowForm(true)}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add Import Folder
+          </Button>
+        </div>
+      )}
+    </SettingGroup>
   );
 }
 
