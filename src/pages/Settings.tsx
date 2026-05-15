@@ -462,8 +462,9 @@ function ManagedFolderQuickAdd() {
     setAdding(true);
     setAddError(null);
     try {
+      const fallbackName = path.split(/[\\/]/).filter(Boolean).pop() ?? path;
       const body: CreateManagedFolderBody = {
-        Name: newName.trim() || path.split(/[\\/]/).filter(Boolean).pop() ?? path,
+        Name: newName.trim() || fallbackName,
         Path: path,
         WatchForNewFiles: watchForNew,
         DropFolderType: 'None',

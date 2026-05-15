@@ -1165,10 +1165,41 @@ Verification evidence:
 - Authenticated smoke returned HTTP 200 for `/api/v3/ReleaseInfo/Summary`, `/api/v3/ReleaseInfo/Provider`, and `/api/v3/Configuration?query=release`.
 - Chrome rendered the Settings > Release Info provider panel and captured desktop/mobile screenshots in `docs/verification/p36/`.
 
+## P37 — Setup Reset and Import Folder Entry Points — DONE
+
+Goal:
+- Surface existing server-owned setup reset and managed-folder creation entry points from Settings without adding browser-side filesystem access or scan behavior.
+
+Audit findings:
+- Server exposes `POST /api/v3/Init/ResetSetup` for admins to set first-run setup mode and request a server restart.
+- Server exposes `GET /api/v3/ManagedFolder` and `POST /api/v3/ManagedFolder`; create validates that the path exists on the server and rejects invalid/nested paths.
+- Settings > Import already had import behavior settings, but did not expose the configured import folder list or a direct path-entry add flow.
+
+Tasks:
+- Add `initApi.resetSetup()` for the existing reset endpoint.
+- Add a Settings > General restore setup wizard button guarded by the shared confirmation dialog.
+- Add a Settings > Import managed-folder quick-add panel that lists current folders and posts new folder paths to the server API.
+- Keep filesystem validation and scanning server-owned; do not browse, scan, hash, or access local files from the browser.
+
+Acceptance criteria:
+- `npm run build` passes.
+- Settings > General renders the restore setup action without triggering it during smoke validation.
+- Settings > Import renders current managed folders and can submit an existing server path through `POST /api/v3/ManagedFolder`.
+- Container route/API smoke confirms `/webui/settings/general`, `/webui/settings/import`, `/api/v3/ManagedFolder`, and server-side managed-folder creation.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-15 with only the existing Vite/PostCSS/SignalR/chunk-size warnings after fixing the import-folder name fallback expression.
+- `git diff --check` passed for `src/api/init.ts`, `src/pages/Settings.tsx`, and this task file with only CRLF conversion notices.
+- Temporary container `dacollector-p37` served the freshly built local `dist` from `/app/webui` on `http://127.0.0.1:38117/webui`.
+- Container route smoke returned HTTP 200 for `/webui/settings/general`, `/webui/settings/import`, and `/webui/version.json`.
+- Authenticated smoke returned HTTP 200 for `/api/v3/ManagedFolder`, `/api/v3/Init/Status`, and `POST /api/v3/ManagedFolder` using an existing server path created in the temporary container.
+- `POST /api/v3/Init/ResetSetup` was not invoked during smoke validation because it intentionally requests a server restart into setup mode.
+- Chrome rendered the Settings > General setup reset action and Settings > Import folder quick-add panel, then captured desktop/mobile screenshots in `docs/verification/p37/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick P37 from remaining unsurfaced API/routes.
+1. Pick P38 from remaining unsurfaced API/routes.
 
 Important:
 - Do not start by changing backend code.
