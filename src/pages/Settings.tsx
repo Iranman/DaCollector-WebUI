@@ -824,6 +824,7 @@ function WebUISettingsSection() {
   const [versionLoading, setVersionLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [versionError, setVersionError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => { load(); }, []);
@@ -843,19 +844,29 @@ function WebUISettingsSection() {
 
   async function loadVersions(channel = releaseChannel, force = false) {
     setVersionLoading(true);
+    setVersionError(null);
     try {
-      const [latestWeb, latestServer, installedVersions, metadata] = await Promise.all([
+      const [latestWeb, latestServer, installedVersions, metadata] = await Promise.allSettled([
         webuiApi.latestVersion(channel, force, allowIncompatible),
         webuiApi.latestServerVersion(channel, force),
         initApi.getVersion(),
         webuiApi.buildMetadata(),
       ]);
-      setWebVersion(latestWeb);
-      setServerVersion(latestServer);
-      setCurrentVersions(installedVersions);
-      setBuildMetadata(metadata);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to check WebUI versions.');
+
+      const failures: string[] = [];
+      if (latestWeb.status === 'fulfilled') setWebVersion(latestWeb.value);
+      else failures.push(`latest WebUI: ${formatError(latestWeb.reason)}`);
+
+      if (latestServer.status === 'fulfilled') setServerVersion(latestServer.value);
+      else failures.push(`latest Server: ${formatError(latestServer.reason)}`);
+
+      if (installedVersions.status === 'fulfilled') setCurrentVersions(installedVersions.value);
+      else failures.push(`installed versions: ${formatError(installedVersions.reason)}`);
+
+      if (metadata.status === 'fulfilled') setBuildMetadata(metadata.value);
+      else failures.push(`bundled metadata: ${formatError(metadata.reason)}`);
+
+      setVersionError(failures.length > 0 ? `Some version checks failed (${failures.join('; ')}).` : null);
     } finally {
       setVersionLoading(false);
     }
@@ -940,10 +951,16 @@ function WebUISettingsSection() {
     }
   }
 
+  const installedWebUI = currentVersions?.WebUI ?? null;
+  const installedServer = currentVersions?.Server ?? null;
+  const bundleState = describeBundledWebUIState(installedWebUI, buildMetadata);
+  const updateState = describeWebUIUpdateState(installedWebUI, webVersion, buildMetadata);
+
   return (
     <div className="space-y-7">
       <SectionHeader title="Web UI" description="Manage WebUI themes and server-backed update checks." />
       {error && <Alert tone="error">{error}</Alert>}
+      {versionError && <Alert tone="warning">{versionError}</Alert>}
       {message && <Alert tone="success">{message}</Alert>}
 
       <SettingGroup title="Versions">
@@ -984,25 +1001,42 @@ function WebUISettingsSection() {
       </SettingGroup>
 
       <SettingGroup title="Diagnostics">
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="mb-3 grid gap-3 md:grid-cols-2">
+          <DiagnosticStatusCard title="Bundle Status" status={bundleState} loading={versionLoading} />
+          <DiagnosticStatusCard title="Update State" status={updateState} loading={versionLoading} />
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
           <DiagnosticBlock
             title="Current Install"
             rows={[
-              ['Server', formatComponentVersion(currentVersions?.Server ?? null)],
-              ['WebUI', formatComponentVersion(currentVersions?.WebUI ?? null)],
-              ['WebUI Commit', shortCommit(currentVersions?.WebUI?.Commit)],
-              ['Server Commit', shortCommit(currentVersions?.Server?.Commit)],
+              ['Server', formatComponentVersion(installedServer)],
+              ['Server Commit', shortCommit(installedServer?.Commit)],
+              ['Server Built', formatDateTime(installedServer?.ReleaseDate)],
+              ['WebUI', formatComponentVersion(installedWebUI)],
+              ['WebUI Commit', shortCommit(installedWebUI?.Commit)],
+              ['WebUI Built', formatDateTime(installedWebUI?.ReleaseDate)],
             ]}
             loading={versionLoading}
           />
           <DiagnosticBlock
-            title="Bundled Client"
+            title="Bundled WebUI"
             rows={[
               ['Package', buildMetadata?.package ?? 'Unknown'],
               ['Minimum Server', buildMetadata?.minimumServerVersion ?? 'Unknown'],
+              ['Tag', buildMetadata?.tag ?? 'Unknown'],
               ['Channel', buildMetadata?.channel ?? 'Unknown'],
               ['Commit', shortCommit(buildMetadata?.git)],
               ['Built', formatDateTime(buildMetadata?.date)],
+            ]}
+            loading={versionLoading}
+          />
+          <DiagnosticBlock
+            title="Latest Release"
+            rows={[
+              ['WebUI', formatComponentVersion(webVersion)],
+              ['WebUI Commit', shortCommit(webVersion?.Commit)],
+              ['Server', formatComponentVersion(serverVersion)],
+              ['Server Commit', shortCommit(serverVersion?.Commit)],
             ]}
             loading={versionLoading}
           />
@@ -1658,6 +1692,30 @@ function ReadonlyValue({ loading, value }: { loading: boolean; value: string }) 
   );
 }
 
+function DiagnosticStatusCard({
+  title,
+  status,
+  loading,
+}: {
+  title: string;
+  status: { tone: 'success' | 'warning' | 'neutral'; text: string; detail: string };
+  loading: boolean;
+}) {
+  const classes = {
+    success: 'border-emerald-500/40 bg-emerald-950/20 text-emerald-200',
+    warning: 'border-yellow-500/40 bg-yellow-950/20 text-yellow-200',
+    neutral: 'border-gray-800/70 bg-gray-950/40 text-gray-300',
+  }[status.tone];
+
+  return (
+    <div className={`rounded-md border px-4 py-3 ${classes}`}>
+      <div className="text-xs font-semibold uppercase tracking-wide opacity-70">{title}</div>
+      <div className="mt-1 text-sm font-medium">{loading ? 'Checking...' : status.text}</div>
+      <p className="mt-1 text-xs opacity-75">{loading ? 'Refreshing metadata from server and bundled client.' : status.detail}</p>
+    </div>
+  );
+}
+
 function DiagnosticBlock({
   title,
   rows,
@@ -1710,6 +1768,116 @@ function formatDateTime(value?: string) {
   if (!value) return 'Unknown';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatError(reason: unknown) {
+  return reason instanceof Error ? reason.message : String(reason);
+}
+
+function normalizeCommit(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed && trimmed !== '0000000' && trimmed.toLowerCase() !== 'unknown'
+    ? trimmed.toLowerCase()
+    : '';
+}
+
+function sameCommit(left?: string, right?: string) {
+  const leftCommit = normalizeCommit(left);
+  const rightCommit = normalizeCommit(right);
+  if (!leftCommit || !rightCommit) return false;
+  return leftCommit === rightCommit || leftCommit.startsWith(rightCommit) || rightCommit.startsWith(leftCommit);
+}
+
+function sameVersion(left?: string, right?: string) {
+  return Boolean(left && right && left.trim().toLowerCase() === right.trim().toLowerCase());
+}
+
+function describeBundledWebUIState(installed: ComponentVersion | null, bundled: WebUIBuildMetadata | null) {
+  if (!installed && !bundled) {
+    return {
+      tone: 'neutral' as const,
+      text: 'Metadata unavailable',
+      detail: 'The server has not returned installed WebUI data and the bundled version file was not loaded.',
+    };
+  }
+
+  if (!bundled) {
+    return {
+      tone: 'warning' as const,
+      text: 'Bundled metadata missing',
+      detail: 'The installed WebUI version is visible, but /webui/version.json could not be loaded.',
+    };
+  }
+
+  if (!installed) {
+    return {
+      tone: 'neutral' as const,
+      text: 'Bundled metadata available',
+      detail: 'The bundled WebUI version is visible, but the server has not reported an installed WebUI version yet.',
+    };
+  }
+
+  if (sameCommit(installed.Commit, bundled.git)) {
+    return {
+      tone: 'success' as const,
+      text: 'Bundled and installed match',
+      detail: 'The installed WebUI commit matches the WebUI bundled in the running container image.',
+    };
+  }
+
+  if (sameVersion(installed.Version, bundled.package)) {
+    return {
+      tone: 'warning' as const,
+      text: 'Same version, different build',
+      detail: 'The installed WebUI semantic version matches the bundle, but the build commit differs.',
+    };
+  }
+
+  return {
+    tone: 'warning' as const,
+    text: 'Bundled and installed differ',
+    detail: 'The installed WebUI version differs from the WebUI bundled in the running container image.',
+  };
+}
+
+function describeWebUIUpdateState(
+  installed: ComponentVersion | null,
+  latest: ComponentVersion | null,
+  bundled: WebUIBuildMetadata | null
+) {
+  if (installed && bundled && !sameCommit(installed.Commit, bundled.git)) {
+    return {
+      tone: 'warning' as const,
+      text: 'Container bundle differs',
+      detail: 'Restart or repair may be needed for the installed WebUI to match the bundled container build.',
+    };
+  }
+
+  if (!installed || !latest) {
+    return {
+      tone: 'neutral' as const,
+      text: 'Latest check incomplete',
+      detail: 'Installed or latest WebUI metadata is not available. Local bundled diagnostics can still be used.',
+    };
+  }
+
+  if (
+    sameVersion(installed.Version, latest.Version) &&
+    (!latest.Commit || sameCommit(installed.Commit, latest.Commit)) &&
+    (!latest.Tag || sameVersion(installed.Tag, latest.Tag))
+  ) {
+    return {
+      tone: 'success' as const,
+      text: 'No WebUI update indicated',
+      detail: 'Installed metadata matches the latest WebUI metadata returned by the server.',
+    };
+  }
+
+  return {
+    tone: 'warning' as const,
+    text: 'Latest WebUI differs',
+    detail: 'The latest WebUI metadata returned by the server differs from the installed WebUI metadata.',
+  };
 }
 
 function formatThemeVersion(version: WebUITheme['Version']) {

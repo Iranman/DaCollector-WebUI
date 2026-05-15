@@ -38,7 +38,8 @@ function releaseQuery(channel: ReleaseChannel, force = false, allowIncompatible 
 }
 
 async function getBuildMetadata(): Promise<WebUIBuildMetadata> {
-  const response = await fetch('/webui/version.json', { cache: 'no-store' });
+  const baseUrl = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+  const response = await fetch(`${baseUrl}version.json`, { cache: 'no-store' });
   if (!response.ok) {
     throw new Error(`Failed to load WebUI build metadata: ${response.status} ${response.statusText}`.trim());
   }

@@ -977,10 +977,51 @@ Implementation notes:
 - Added `webuiApi.buildMetadata()` to fetch `/webui/version.json` with `cache: no-store`.
 - Settings > Web UI now loads `initApi.getVersion()` and static metadata with the existing version check flow and renders read-only diagnostics blocks.
 
+## P31 — Container-Served WebUI Validation and Diagnostics Polish — DONE
+
+Goal:
+- Validate the React WebUI through the published Docker/Server `/webui` deployment path and make WebUI diagnostics clear enough to confirm install/update state from the browser.
+
+Tasks:
+- Run the container-served WebUI from `http://127.0.0.1:38111/webui`, not only Vite.
+- Smoke the key bundled routes:
+  - `/webui/setup`
+  - `/webui/login`
+  - `/webui/dashboard`
+  - `/webui/settings/web-ui`
+  - `/webui/files`
+  - `/webui/utilities`
+- Capture desktop and mobile screenshot evidence under `docs/verification/p31/`.
+- Polish Settings > Web UI diagnostics so it clearly distinguishes:
+  - installed WebUI
+  - bundled WebUI
+  - latest WebUI/server metadata
+  - bundle/install mismatch state
+  - update state
+- Keep diagnostics read-only and browser-only. Do not move Docker packaging or install decisions into this repo.
+
+Acceptance criteria:
+- `npm run build` passes.
+- The bundled `/webui/version.json` path is loaded using the Vite base URL so it works from `/webui`.
+- Settings > Web UI keeps rendering local bundled/install metadata even if remote latest-version checks fail.
+- Container-served route smoke passes for the key routes above.
+- Desktop and mobile screenshot evidence is recorded in `docs/verification/p31/`.
+
+Implementation notes:
+- `webuiApi.buildMetadata()` now resolves `version.json` from `import.meta.env.BASE_URL` instead of hardcoding `/webui`.
+- Settings > Web UI version loading now uses partial-result handling so installed/bundled diagnostics still render if the latest WebUI or latest Server check fails.
+- Diagnostics now include bundle/install match state, update state, current install metadata, bundled WebUI metadata, and latest-release metadata.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-15 with only the existing Vite/PostCSS/SignalR/chunk-size warnings.
+- Temporary container-served validation passed at `http://127.0.0.1:38112/webui` using `ghcr.io/iranman/dacollector:latest` with local `dist` mounted as `/app/webui`.
+- Route smoke returned HTTP 200 for `/webui/setup`, `/webui/login`, `/webui/dashboard`, `/webui/settings/web-ui`, `/webui/files`, `/webui/utilities`, and `/webui/version.json`.
+- Screenshot evidence is in `docs/verification/p31/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick the next backlog from the current parity audit or create P31+ before coding.
+1. Finish P31, then pick the next backlog from the current parity audit or create P32+ before coding.
 
 Important:
 - Do not start by changing backend code.
