@@ -1105,10 +1105,40 @@ Verification evidence:
 - Authenticated smoke returned HTTP 200 for `/api/v3/Hashing/Summary`, `/api/v3/Hashing/Provider`, and `/api/v3/Queue`.
 - Headless Chrome rendered the new Utilities hashing panel and captured desktop/mobile screenshots in `docs/verification/p34/`.
 
+## P35 — Database Backup Visibility — DONE
+
+Goal:
+- Surface the existing read-only database backup list in Settings > Database without adding browser-side backup, restore, delete, or filesystem behavior.
+
+Audit findings:
+- Server exposes `GET /api/v3/Database/Backups` for admin users and returns backup filename, size, and creation timestamp.
+- Server also exposes backup create, queue, and delete endpoints, but those mutation paths are intentionally out of scope for this slice.
+- Before this slice, Settings > Database only showed generic configuration metadata through `ConfigurationController`.
+
+Tasks:
+- Add a typed `src/api/database.ts` client for `GET /api/v3/Database/Backups`.
+- Add a read-only backup files panel to Settings > Database.
+- Preserve existing configuration metadata and validation cards in Settings > Database.
+- Show a clear panel-local message when the current user is not authorized to view backup files.
+
+Acceptance criteria:
+- `npm run build` passes.
+- `/settings/database` still renders the existing configuration metadata.
+- Database backups are displayed with filename, size, and creation time when the admin endpoint succeeds.
+- Container route/API smoke confirms `/webui/settings/database` and `/api/v3/Database/Backups`.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-15 with only the existing Vite/PostCSS/SignalR/chunk-size warnings.
+- `git diff --check` passed for `src/api/database.ts`, `src/pages/Settings.tsx`, and this task file with only CRLF conversion notices.
+- Temporary container `dacollector-p35` served the freshly built local `dist` from `/app/webui` on `http://127.0.0.1:38115/webui`.
+- Container route smoke returned HTTP 200 for `/webui/settings/database`, `/webui/settings/general`, and `/webui/version.json`.
+- Authenticated smoke returned HTTP 200 for `/api/v3/Database/Backups` and `/api/v3/Configuration?query=database`.
+- Headless Chrome rendered the Settings > Database backup panel and captured desktop/mobile screenshots in `docs/verification/p35/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick P35 from remaining unsurfaced API/routes.
+1. Pick P36 from remaining unsurfaced API/routes.
 
 Important:
 - Do not start by changing backend code.

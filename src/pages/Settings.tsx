@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, Image as ImageIcon, KeyRound, Link2, Palette, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
+import { Archive, Check, Image as ImageIcon, KeyRound, Link2, Palette, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { ApiError } from '../api/client';
 import { configurationApi, ConfigurationInfo } from '../api/configuration';
+import { databaseApi, DatabaseBackupFile } from '../api/database';
 import { ComponentVersion, ComponentVersionSet, initApi } from '../api/init';
 import { settingsApi, ServerSettings } from '../api/settings';
 import { tagsApi, Tag } from '../api/tags';
@@ -346,11 +347,7 @@ export default function Settings() {
                 />
               )}
               {activeSection === 'database' && (
-                <ConfigurationSummarySection
-                  title="Database"
-                  description="Review database and backup configuration visibility, restart requirements, and validation status."
-                  queries={['database', 'backup', 'core']}
-                />
+                <DatabaseSection />
               )}
             </div>
 
@@ -1103,10 +1100,12 @@ function WebUISettingsSection() {
 }
 
 function ConfigurationSummarySection({
+  showHeader = true,
   title,
   description,
   queries,
 }: {
+  showHeader?: boolean;
   title: string;
   description: string;
   queries: string[];
@@ -1159,7 +1158,7 @@ function ConfigurationSummarySection({
 
   return (
     <div className="space-y-7">
-      <SectionHeader title={title} description={description} />
+      {showHeader && <SectionHeader title={title} description={description} />}
       {error && <Alert tone="error">{error}</Alert>}
       <SettingGroup title="Server Configuration">
         {loading ? (
@@ -1692,6 +1691,108 @@ function ReadonlyValue({ loading, value }: { loading: boolean; value: string }) 
   );
 }
 
+function DatabaseSection() {
+  return (
+    <div className="space-y-7">
+      <SectionHeader
+        title="Database"
+        description="Review database backup files and database-related configuration exposed by the server."
+      />
+      <DatabaseBackupsPanel />
+      <ConfigurationSummarySection
+        title="Database"
+        description="Review database and backup configuration visibility, restart requirements, and validation status."
+        queries={['database', 'backup', 'core']}
+        showHeader={false}
+      />
+    </div>
+  );
+}
+
+function DatabaseBackupsPanel() {
+  const [backups, setBackups] = useState<DatabaseBackupFile[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadBackups() {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await databaseApi.backups();
+      setBackups([...result].sort((a, b) => new Date(b.CreatedAt).getTime() - new Date(a.CreatedAt).getTime()));
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setError('Database backup visibility requires an administrator account.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to load database backups.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadBackups();
+  }, []);
+
+  const totalSize = backups.reduce((sum, backup) => sum + backup.SizeBytes, 0);
+  const latest = backups[0];
+
+  return (
+    <SettingGroup title="Backup Files">
+      <div className="rounded-md border border-gray-800/70 bg-gray-950/40">
+        <div className="flex flex-col gap-3 border-b border-gray-800/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Archive size={16} className="text-blue-400" />
+            <div>
+              <div className="text-sm font-medium text-gray-100">Database backups</div>
+              <div className="text-xs text-gray-500">Read-only list from the server backup directory.</div>
+            </div>
+          </div>
+          <Button size="sm" variant="secondary" onClick={loadBackups} disabled={loading}>
+            <RefreshCw size={13} className={loading ? 'mr-1.5 animate-spin' : 'mr-1.5'} />
+            Refresh
+          </Button>
+        </div>
+
+        {error ? (
+          <div className="px-4 py-4 text-sm text-yellow-200">{error}</div>
+        ) : loading ? (
+          <InlineSpinner />
+        ) : backups.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-gray-500">No database backup files were reported.</div>
+        ) : (
+          <div>
+            <div className="grid gap-3 border-b border-gray-800/70 p-4 sm:grid-cols-3">
+              <BackupStat label="Files" value={backups.length} />
+              <BackupStat label="Total Size" value={formatBytes(totalSize)} />
+              <BackupStat label="Latest" value={formatDateTime(latest?.CreatedAt)} />
+            </div>
+            <div className="divide-y divide-gray-800/70">
+              {backups.map(backup => (
+                <div key={backup.FileName} className="grid gap-2 px-4 py-3 text-sm sm:grid-cols-[minmax(0,1fr)_7rem_11rem] sm:items-center">
+                  <div className="min-w-0 break-words font-medium text-gray-100">{backup.FileName}</div>
+                  <div className="text-gray-400">{formatBytes(backup.SizeBytes)}</div>
+                  <div className="text-gray-500">{formatDateTime(backup.CreatedAt)}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </SettingGroup>
+  );
+}
+
+function BackupStat({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="rounded-md border border-gray-800/80 bg-black/20 px-3 py-2">
+      <p className="text-[11px] uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 truncate text-sm font-semibold text-gray-100">{value}</p>
+    </div>
+  );
+}
+
 function DiagnosticStatusCard({
   title,
   status,
@@ -1768,6 +1869,18 @@ function formatDateTime(value?: string) {
   if (!value) return 'Unknown';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
 }
 
 function formatError(reason: unknown) {
