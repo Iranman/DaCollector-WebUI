@@ -1,10 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, RefreshCw, Wifi, WifiOff, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, Layers3, RefreshCw, Tags, Wifi, WifiOff, XCircle } from 'lucide-react';
 import { ServerStatus } from '../api/init';
-import { api, ApiError } from '../api/client';
+import { ApiError } from '../api/client';
 import { QueueStatus } from '../api/queue';
 import { managedFoldersApi } from '../api/managedFolders';
+import {
+  CollectionStats,
+  DashboardEpisode,
+  dashboardApi,
+  DashboardSeries,
+  DashboardSeriesSummary,
+  DashboardTag,
+} from '../api/dashboard';
 import {
   DaCollectorStatus,
   ProviderConnectionStatus,
@@ -12,23 +20,6 @@ import {
   ServerCapabilityStatus,
 } from '../api/dacollectorStatus';
 import { useLiveState } from '../lib/liveState';
-
-interface CollectionStats {
-  FileCount: number;
-  FileSize: number;
-  SeriesCount: number;
-  GroupCount: number;
-  FinishedSeries: number;
-  WatchedEpisodes: number;
-  WatchedHours: number;
-  PercentDuplicate: number;
-  MissingEpisodes: number;
-  MissingEpisodesCollecting: number;
-  UnrecognizedFiles: number;
-  SeriesWithMissingLinks: number;
-  EpisodesWithMultipleFiles: number;
-  FilesWithDuplicateLocations: number;
-}
 
 interface WarningItem {
   key: string;
@@ -39,27 +30,36 @@ interface WarningItem {
 
 type DashboardPanelId =
   | 'summary'
+  | 'activity'
+  | 'watch-state'
   | 'warnings'
   | 'queue-plex'
   | 'providers'
   | 'collection-health'
+  | 'composition'
   | 'capabilities';
 
 const dashboardPanelLabels: Record<DashboardPanelId, string> = {
   summary: 'Summary cards',
+  activity: 'Recent activity',
+  'watch-state': 'Watch state',
   warnings: 'Readiness warnings',
   'queue-plex': 'Queue and Plex target',
   providers: 'Providers and collections',
   'collection-health': 'Collection health',
+  composition: 'Composition and tags',
   capabilities: 'Server capabilities',
 };
 
 const defaultDashboardPanelOrder: DashboardPanelId[] = [
   'summary',
+  'activity',
+  'watch-state',
   'warnings',
   'queue-plex',
   'providers',
   'collection-health',
+  'composition',
   'capabilities',
 ];
 
@@ -84,8 +84,15 @@ export default function Dashboard() {
     versions,
   } = useLiveState();
   const [stats, setStats] = useState<CollectionStats | null>(null);
+  const [seriesSummary, setSeriesSummary] = useState<DashboardSeriesSummary | null>(null);
+  const [topTags, setTopTags] = useState<DashboardTag[]>([]);
+  const [recentEpisodes, setRecentEpisodes] = useState<DashboardEpisode[]>([]);
+  const [recentSeries, setRecentSeries] = useState<DashboardSeries[]>([]);
+  const [continueWatching, setContinueWatching] = useState<DashboardEpisode[]>([]);
+  const [nextUp, setNextUp] = useState<DashboardEpisode[]>([]);
   const [managedFolderCount, setManagedFolderCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [extrasError, setExtrasError] = useState<string | null>(null);
   const [panelSettingsOpen, setPanelSettingsOpen] = useState(false);
   const [panelOrder, setPanelOrder] = useState<DashboardPanelId[]>(() => loadDashboardPrefs().order);
   const [panelVisibility, setPanelVisibility] = useState<Record<DashboardPanelId, boolean>>(() => loadDashboardPrefs().visibility);
@@ -97,19 +104,72 @@ export default function Dashboard() {
       if (status?.State !== 'Started') return;
 
       try {
-        const [statsResult, foldersResult] = await Promise.allSettled([
-          api.get<CollectionStats>('/api/v3/Dashboard/Stats'),
+        const [
+          statsResult,
+          foldersResult,
+          seriesSummaryResult,
+          topTagsResult,
+          recentEpisodesResult,
+          recentSeriesResult,
+          continueWatchingResult,
+          nextUpResult,
+        ] = await Promise.allSettled([
+          dashboardApi.stats(),
           managedFoldersApi.list(),
+          dashboardApi.seriesSummary(),
+          dashboardApi.topTags(12),
+          dashboardApi.recentlyAddedEpisodes(8),
+          dashboardApi.recentlyAddedSeries(8),
+          dashboardApi.continueWatchingEpisodes(8),
+          dashboardApi.nextUpEpisodes(8),
         ]);
         if (stopped) return;
 
-        if (statsResult.status === 'fulfilled') setStats(statsResult.value);
+        setError(null);
+        setExtrasError(null);
+
+        if (hasUnauthorized([
+          statsResult,
+          foldersResult,
+          seriesSummaryResult,
+          topTagsResult,
+          recentEpisodesResult,
+          recentSeriesResult,
+          continueWatchingResult,
+          nextUpResult,
+        ])) {
+          navigate('/login');
+          return;
+        }
+
+        if (statsResult.status === 'fulfilled') {
+          setStats(statsResult.value);
+        } else {
+          setError(toErrorMessage(statsResult.reason, 'Failed to load dashboard stats.'));
+        }
 
         if (foldersResult.status === 'fulfilled') {
           setManagedFolderCount(foldersResult.value.length);
-        } else if (foldersResult.reason instanceof ApiError && foldersResult.reason.status === 401) {
-          navigate('/login');
         }
+
+        const extraFailure = [
+          seriesSummaryResult,
+          topTagsResult,
+          recentEpisodesResult,
+          recentSeriesResult,
+          continueWatchingResult,
+          nextUpResult,
+        ].find(result => result.status === 'rejected');
+        if (extraFailure?.status === 'rejected') {
+          setExtrasError(toErrorMessage(extraFailure.reason, 'Some dashboard panels could not be loaded.'));
+        }
+
+        if (seriesSummaryResult.status === 'fulfilled') setSeriesSummary(seriesSummaryResult.value);
+        if (topTagsResult.status === 'fulfilled') setTopTags(topTagsResult.value);
+        if (recentEpisodesResult.status === 'fulfilled') setRecentEpisodes(recentEpisodesResult.value.List);
+        if (recentSeriesResult.status === 'fulfilled') setRecentSeries(recentSeriesResult.value.List);
+        if (continueWatchingResult.status === 'fulfilled') setContinueWatching(continueWatchingResult.value.List);
+        if (nextUpResult.status === 'fulfilled') setNextUp(nextUpResult.value.List);
       } catch (err) {
         if (stopped) return;
         if (err instanceof ApiError && err.status === 401) {
@@ -161,6 +221,24 @@ export default function Dashboard() {
           <StatCard label="Folders" value={managedFolderCount == null ? '—' : String(managedFolderCount)} />
           <StatCard label="Series" value={stats ? String(stats.SeriesCount) : '—'} />
           <StatCard label="Files" value={stats ? String(stats.FileCount) : '—'} />
+        </div>
+      );
+    }
+
+    if (panelId === 'activity') {
+      return (
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <SeriesListPanel title="Recently Added Series" series={recentSeries} emptyText="No recently added series." />
+          <EpisodeListPanel title="Recently Added Episodes" episodes={recentEpisodes} emptyText="No recently added episodes." />
+        </div>
+      );
+    }
+
+    if (panelId === 'watch-state') {
+      return (
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <EpisodeListPanel title="Continue Watching" episodes={continueWatching} emptyText="No active watch-state entries." />
+          <EpisodeListPanel title="Next Up" episodes={nextUp} emptyText="No next-up episodes reported." />
         </div>
       );
     }
@@ -231,6 +309,15 @@ export default function Dashboard() {
       ) : null;
     }
 
+    if (panelId === 'composition') {
+      return (
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+          <SeriesSummaryPanel summary={seriesSummary} />
+          <TopTagsPanel tags={topTags} />
+        </div>
+      );
+    }
+
     if (panelId === 'capabilities') {
       return readiness ? <CapabilitiesPanel key={panelId} capabilities={readiness.ServerCapabilities} /> : null;
     }
@@ -265,6 +352,12 @@ export default function Dashboard() {
         </div>
       )}
 
+      {extrasError && (
+        <div className="app-card rounded-md border-yellow-700/50 px-4 py-3 text-sm text-yellow-400">
+          {extrasError}
+        </div>
+      )}
+
       {panelOrder.map(panelId => renderDashboardPanel(panelId))}
 
       {panelSettingsOpen && (
@@ -279,6 +372,14 @@ export default function Dashboard() {
       )}
     </div>
   );
+}
+
+function hasUnauthorized(results: PromiseSettledResult<unknown>[]) {
+  return results.some(result => result.status === 'rejected' && result.reason instanceof ApiError && result.reason.status === 401);
+}
+
+function toErrorMessage(reason: unknown, fallback: string) {
+  return reason instanceof Error ? reason.message : fallback;
 }
 
 function buildWarnings(
@@ -376,6 +477,125 @@ function WarningPanel({ warnings }: { warnings: WarningItem[] }) {
   );
 }
 
+function SeriesListPanel({ emptyText, series, title }: { emptyText: string; series: DashboardSeries[]; title: string }) {
+  return (
+    <div className="app-card rounded-md">
+      <PanelHeader icon={<Layers3 size={15} className="text-blue-400" />} title={title} count={series.length} />
+      {series.length === 0 ? (
+        <EmptyPanel text={emptyText} />
+      ) : (
+        <ul className="divide-y divide-gray-800/50">
+          {series.map((item, index) => (
+            <li key={`${seriesID(item) ?? index}-${seriesTitle(item)}`} className="px-5 py-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-gray-100">{seriesTitle(item)}</p>
+                  {item.Description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{item.Description}</p>}
+                </div>
+                <div className="shrink-0 text-right text-xs text-gray-500">
+                  {item.EpisodeCount != null && <p>{item.EpisodeCount} episode{item.EpisodeCount === 1 ? '' : 's'}</p>}
+                  {item.Size != null && <p>{item.Size} item{item.Size === 1 ? '' : 's'}</p>}
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function EpisodeListPanel({ emptyText, episodes, title }: { emptyText: string; episodes: DashboardEpisode[]; title: string }) {
+  return (
+    <div className="app-card rounded-md">
+      <PanelHeader icon={<Clock3 size={15} className="text-blue-400" />} title={title} count={episodes.length} />
+      {episodes.length === 0 ? (
+        <EmptyPanel text={emptyText} />
+      ) : (
+        <ul className="divide-y divide-gray-800/50">
+          {episodes.map((episode, index) => (
+            <li key={`${episode.IDs.DaCollectorEpisode ?? episode.IDs.ID}-${episode.IDs.DaCollectorFile ?? index}`} className="flex items-center gap-3 px-5 py-3">
+              <EpisodeArtwork episode={episode} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-gray-100">{episode.Title || `Episode ${episode.Number}`}</p>
+                <p className="truncate text-xs text-gray-500">{episode.SeriesTitle}</p>
+                <p className="mt-1 truncate text-[11px] text-gray-600">{episodeMeta(episode)}</p>
+              </div>
+              {episode.IDs.DaCollectorFile != null && (
+                <Link to={`/files?search=${episode.IDs.DaCollectorFile}`} className="shrink-0 text-xs font-medium text-blue-400 hover:text-blue-300">
+                  File
+                </Link>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function SeriesSummaryPanel({ summary }: { summary: DashboardSeriesSummary | null }) {
+  const rows = summary ? [
+    ['Series', summary.Series],
+    ['Movies', summary.Movie],
+    ['OVA', summary.OVA],
+    ['Specials', summary.Special],
+    ['Web', summary.Web],
+    ['Music Videos', summary.MusicVideo],
+    ['Other', summary.Other],
+    ['Unknown', summary.Unknown + summary.None],
+  ] as const : [];
+
+  return (
+    <div className="app-card rounded-md">
+      <PanelHeader icon={<CalendarDays size={15} className="text-blue-400" />} title="Collection Composition" />
+      {summary == null ? (
+        <EmptyPanel text="Composition data is not available." />
+      ) : (
+        <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
+          {rows.map(([label, value]) => (
+            <MiniStat key={label} label={label} value={String(value)} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TopTagsPanel({ tags }: { tags: DashboardTag[] }) {
+  return (
+    <div className="app-card rounded-md">
+      <PanelHeader icon={<Tags size={15} className="text-blue-400" />} title="Top Tags" count={tags.length} />
+      {tags.length === 0 ? (
+        <EmptyPanel text="No top tags reported." />
+      ) : (
+        <div className="flex flex-wrap gap-2 p-5">
+          {tags.map(tag => (
+            <span key={`${tag.ID ?? tag.Name}-${tag.Weight ?? 0}`} className="rounded-md border border-gray-700/50 bg-gray-950/40 px-3 py-2 text-xs text-gray-300">
+              {tag.Name}
+              {tag.Weight != null && <span className="ml-1.5 text-gray-600">{tag.Weight}</span>}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PanelHeader({ count, icon, title }: { count?: number; icon: React.ReactNode; title: string }) {
+  return (
+    <div className="flex items-center gap-2 border-b border-gray-700/50 px-5 py-3">
+      {icon}
+      <h2 className="text-sm font-semibold text-gray-200">{title}</h2>
+      {count != null && <span className="ml-auto rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-500">{count}</span>}
+    </div>
+  );
+}
+
+function EmptyPanel({ text }: { text: string }) {
+  return <div className="px-5 py-8 text-center text-sm text-gray-600">{text}</div>;
+}
+
 function ProviderPanel({ providers }: { providers: ProviderConnectionStatus[] }) {
   return (
     <div className="app-card rounded-md">
@@ -439,7 +659,7 @@ function PlexPanel({ plex }: { plex: PlexTargetConnectionStatus }) {
         <h2 className="text-sm font-semibold text-gray-200">Plex Target</h2>
         <StatusPill state={plex.Ready ? 'ready' : plex.Reachable ? 'warning' : 'off'} label={plex.Ready ? 'Ready' : plex.Reachable ? 'Partial' : 'Offline'} />
       </div>
-      <div className="space-y-3 p-5">
+      <div className="divide-y divide-gray-800/50">
         <HealthRow label="Base URL" value={plex.BaseUrl || '—'} />
         <HealthRow label="Identity" value={plex.Identity?.Version ? `v${plex.Identity.Version}` : plex.Identity?.Status ?? '—'} warn={!plex.Reachable} />
         <HealthRow label="Libraries" value={plex.LibraryCount == null ? plex.LibraryStatus : plex.LibraryCount} warn={plex.LibraryStatus !== 'OK'} />
@@ -507,9 +727,9 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 
 function HealthRow({ label, value, warn }: { label: string; value: number | string; warn?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-1.5 text-sm">
-      <span className="text-gray-400">{label}</span>
-      <span className={`min-w-0 truncate text-right ${warn ? 'font-medium text-yellow-400' : 'text-gray-300'}`}>{value}</span>
+    <div className="flex items-start justify-between gap-4 px-5 py-2 text-sm">
+      <span className="min-w-0 break-words text-gray-400">{label}</span>
+      <span className={`min-w-0 max-w-[65%] break-words text-right ${warn ? 'font-medium text-yellow-400' : 'text-gray-300'}`}>{value}</span>
     </div>
   );
 }
@@ -580,6 +800,56 @@ function QueueWidget({ queue, connState }: { queue: QueueStatus | null; connStat
       )}
     </div>
   );
+}
+
+function EpisodeArtwork({ episode }: { episode: DashboardEpisode }) {
+  const thumbnail = imageUrl(episode.Thumbnail) ?? imageUrl(episode.SeriesPoster);
+
+  if (!thumbnail) {
+    return (
+      <div className="grid h-14 w-10 shrink-0 place-items-center rounded-md border border-gray-800/70 bg-gray-950/40 text-[10px] text-gray-600">
+        {episode.Number}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={thumbnail}
+      alt=""
+      className="h-14 w-10 shrink-0 rounded-md border border-gray-800/70 object-cover"
+      loading="lazy"
+    />
+  );
+}
+
+function imageUrl(image?: { ID: number; Source: string; Type: string; Available?: boolean } | null) {
+  if (!image || image.ID <= 0 || image.Available === false) return undefined;
+  return `/api/v3/Image/${encodeURIComponent(image.Source)}/${encodeURIComponent(image.Type)}/${image.ID}`;
+}
+
+function episodeMeta(episode: DashboardEpisode) {
+  return [
+    `${episode.Type} ${episode.Number}`,
+    formatDate(episode.AirDate),
+    episode.Duration,
+    episode.Watched ? `Watched ${formatDate(episode.Watched)}` : undefined,
+  ].filter(Boolean).join(' · ');
+}
+
+function formatDate(value?: string) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString();
+}
+
+function seriesTitle(series: DashboardSeries) {
+  return series.Name ?? series.Title ?? `Series ${seriesID(series) ?? 'unknown'}`;
+}
+
+function seriesID(series: DashboardSeries) {
+  return series.ID ?? series.IDs?.ID;
 }
 
 function formatQueueDetails(details: Record<string, unknown> | undefined) {

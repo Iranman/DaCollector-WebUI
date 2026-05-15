@@ -1046,10 +1046,40 @@ Verification evidence:
 - Temporary Vite route smoke at `http://127.0.0.1:5180` returned HTTP 200 for `/webui/not-a-real-route-p32`, `/webui/dashboard`, and `/webui/login`.
 - Headless Chrome rendered the authenticated unsupported-route page and captured desktop/mobile screenshots in `docs/verification/p32/`.
 
+## P33 — DashboardController Coverage Pass — DONE
+
+Goal:
+- Use more of the existing `DashboardController` read-only API surface so the main Dashboard is not limited to `/Dashboard/Stats`.
+
+Audit findings:
+- Server exposes `/api/v3/Dashboard/Stats`, `/SeriesSummary`, `/TopTags`, `/RecentlyAddedEpisodes`, `/RecentlyAddedSeries`, `/ContinueWatchingEpisodes`, `/NextUpEpisodes`, `/AniDBCalendar`, and `/CalendarEpisodes`.
+- React WebUI only used `/Dashboard/Stats` before this slice.
+- Calendar endpoints are intentionally left out of this slice because they need a dedicated date-range UI and explicit missing/restricted filters.
+
+Tasks:
+- Add a typed `src/api/dashboard.ts` client for read-only DashboardController endpoints.
+- Add dashboard panels for recent local activity, watch-state summaries, collection composition, and top tags.
+- Preserve existing dashboard panel preference migration so users with saved panel order automatically receive new panels.
+- Keep panels informational only; do not add playback, downloads, filesystem access, or backend behavior.
+
+Acceptance criteria:
+- `npm run build` passes.
+- Existing dashboard panels still render and remain configurable.
+- New panels degrade to empty/error states when optional DashboardController calls fail.
+- Screenshot evidence is recorded for desktop and mobile Dashboard.
+
+Verification evidence:
+- `npm run build` passed on 2026-05-15 with only the existing Vite/PostCSS/SignalR/chunk-size warnings.
+- `git diff --check` passed for `src/api/dashboard.ts`, `src/pages/Dashboard.tsx`, and this task file with only CRLF conversion notices.
+- Temporary container `dacollector-p33` served the freshly built local `dist` from `/app/webui` on `http://127.0.0.1:38113/webui`.
+- Container route smoke returned HTTP 200 for `/webui/dashboard`, `/webui/settings/general`, `/webui/files`, and `/webui/version.json`.
+- Authenticated DashboardController smoke returned HTTP 200 for `/Stats`, `/SeriesSummary`, `/TopTags`, `/RecentlyAddedEpisodes`, `/RecentlyAddedSeries`, `/ContinueWatchingEpisodes`, and `/NextUpEpisodes`.
+- Headless Chrome rendered the new dashboard panels and captured desktop/mobile screenshots in `docs/verification/p33/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick P33 from a fresh route/API/backlog audit before coding.
+1. Pick P34 from remaining unsurfaced API/routes.
 
 Important:
 - Do not start by changing backend code.
