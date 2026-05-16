@@ -534,6 +534,41 @@ function ManagedFolderQuickAdd() {
   );
 }
 
+function ProviderTestButton({
+  label,
+  onTest,
+}: {
+  label: string;
+  onTest: () => Promise<void>;
+}) {
+  const [state, setState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const run = async () => {
+    setState('testing');
+    setErrorMsg(null);
+    try {
+      await onTest();
+      setState('ok');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setErrorMsg(msg);
+      setState('fail');
+    }
+    setTimeout(() => setState('idle'), 4000);
+  };
+
+  return (
+    <div className="flex items-center gap-3">
+      <Button onClick={run} disabled={state === 'testing'} className="shrink-0">
+        {state === 'testing' ? 'Testing…' : label}
+      </Button>
+      {state === 'ok' && <span className="text-sm text-green-400">Connected successfully</span>}
+      {state === 'fail' && <span className="text-sm text-red-400">{errorMsg ?? 'Connection failed'}</span>}
+    </div>
+  );
+}
+
 function TVDBSection({
   settings,
   updateSetting,
@@ -555,6 +590,17 @@ function TVDBSection({
         <SettingsRow label="Cache Expiration Days">
           <TextInput type="number" min={1} max={365} value={settings.TVDB?.CacheExpirationDays ?? 7} onChange={e => updateSetting(['TVDB', 'CacheExpirationDays'], Number(e.target.value))} />
         </SettingsRow>
+        <SettingsRow label="Test Connection">
+          <ProviderTestButton
+            label="Test TVDB"
+            onTest={async () => {
+              const key = settings.TVDB?.ApiKey ?? '';
+              if (!key.trim()) throw new Error('Enter an API key first.');
+              const result = await initApi.testTvdbKey(key, settings.TVDB?.Pin ?? undefined);
+              if (!result.Success) throw new Error(result.Error ?? 'Connection failed');
+            }}
+          />
+        </SettingsRow>
       </SettingGroup>
       <p className="text-sm text-gray-500">TVDB requires an API key before TVDB collection builders can fetch provider data.</p>
     </div>
@@ -573,7 +619,18 @@ function MetadataSitesSection({
       <SectionHeader title="Metadata Sites" description="Customize the information and images that DaCollector downloads for movies and TV series in your collection." />
       <SettingGroup title="TMDB Options">
         <SettingsRow label="API Key">
-          <TextInput type="password" value={settings.TMDB?.UserApiKey ?? ''} onChange={e => updateSetting(['TMDB', 'UserApiKey'], e.target.value)} placeholder="Optional — uses shared key if blank" />
+          <TextInput type="password" value={settings.TMDB?.UserApiKey ?? ''} onChange={e => updateSetting(['TMDB', 'UserApiKey'], e.target.value)} placeholder="Required — get your key at themoviedb.org" />
+        </SettingsRow>
+        <SettingsRow label="Test Connection">
+          <ProviderTestButton
+            label="Test TMDB"
+            onTest={async () => {
+              const key = settings.TMDB?.UserApiKey ?? '';
+              if (!key.trim()) throw new Error('Enter an API key first.');
+              const result = await initApi.testTmdbKey(key);
+              if (!result.Success) throw new Error(result.Error ?? 'Connection failed');
+            }}
+          />
         </SettingsRow>
         <ToggleRow label="Auto Link" checked={toBool(settings.TMDB?.AutoLink, true)} onChange={v => updateSetting(['TMDB', 'AutoLink'], v)} />
         <ToggleRow label="Auto Link Restricted" checked={toBool(settings.TMDB?.AutoLinkRestricted, true)} onChange={v => updateSetting(['TMDB', 'AutoLinkRestricted'], v)} />
