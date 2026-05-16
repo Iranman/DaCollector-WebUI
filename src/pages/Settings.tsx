@@ -357,22 +357,45 @@ function GeneralSection({
 }: {
   settings: ServerSettings;
 }) {
+  const navigate = useNavigate();
   const confirm = useConfirm();
   const { notify } = useToast();
   const [resetting, setResetting] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  async function pollForServerUp() {
+    for (let i = 0; i < 90; i++) {
+      await new Promise<void>(r => setTimeout(r, 2000));
+      try {
+        const status = await initApi.getStatus();
+        if (status.State === 'Waiting') { navigate('/setup'); return; }
+        if (status.State === 'Started') { navigate('/dashboard'); return; }
+      } catch { /* server still down */ }
+    }
+    setReconnecting(false);
+    notify({ message: 'Server did not come back in time. Refresh the page manually.', tone: 'warning' });
+  }
 
   async function handleRestoreSetup() {
     const ok = await confirm({
       title: 'Restore Setup Wizard',
-      message: 'This will restart the server into setup mode. You will be redirected to the setup wizard on next load. Continue?',
+      message: 'This will save the first-run flag and restart the server into setup mode. Continue?',
       confirmLabel: 'Restore & Restart',
       tone: 'danger',
     });
     if (!ok) return;
     setResetting(true);
     try {
-      await initApi.resetSetup();
-      notify({ message: 'Server is restarting into setup mode…', tone: 'info' });
+      const result = await initApi.resetSetup();
+      if (result.Restarting) {
+        setReconnecting(true);
+        void pollForServerUp();
+      } else {
+        notify({
+          message: 'Setup mode enabled. Restart the server manually to enter the setup wizard.',
+          tone: 'warning',
+        });
+      }
     } catch (err) {
       notify({ message: err instanceof Error ? err.message : 'Reset failed.', title: 'Reset failed', tone: 'error' });
     } finally {
@@ -381,21 +404,30 @@ function GeneralSection({
   }
 
   return (
-    <div className="space-y-7">
-      <SectionHeader title="General" description="Here you can find settings for version details, theme customization, notification management, and log configurations." />
-      <SettingGroup title="Database Settings">
-        <SettingsRow label="Database Type">
-          <TextInput value={settings.Database?.Type ?? 'SQLite'} readOnly />
-        </SettingsRow>
-      </SettingGroup>
-      <SettingGroup title="Setup">
-        <SettingsRow label="Restore Setup Wizard" description="Reset the server back to first-run setup mode and restart. Use this if initial setup was skipped or needs to be re-run.">
-          <Button variant="destructive" size="sm" onClick={() => void handleRestoreSetup()} disabled={resetting}>
-            {resetting ? 'Restarting…' : 'Restore'}
-          </Button>
-        </SettingsRow>
-      </SettingGroup>
-    </div>
+    <>
+      {reconnecting && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
+          <div className="h-14 w-14 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <p className="mt-6 text-xl font-semibold text-white">Server Restarting</p>
+          <p className="mt-2 text-sm text-gray-400">Waiting for the setup wizard to become available…</p>
+        </div>
+      )}
+      <div className="space-y-7">
+        <SectionHeader title="General" description="Here you can find settings for version details, theme customization, notification management, and log configurations." />
+        <SettingGroup title="Database Settings">
+          <SettingsRow label="Database Type">
+            <TextInput value={settings.Database?.Type ?? 'SQLite'} readOnly />
+          </SettingsRow>
+        </SettingGroup>
+        <SettingGroup title="Setup">
+          <SettingsRow label="Restore Setup Wizard" description="Reset the server back to first-run setup mode and restart. Use this if initial setup was skipped or needs to be re-run.">
+            <Button variant="destructive" size="sm" onClick={() => void handleRestoreSetup()} disabled={resetting || reconnecting}>
+              {resetting ? 'Saving…' : 'Restore'}
+            </Button>
+          </SettingsRow>
+        </SettingGroup>
+      </div>
+    </>
   );
 }
 

@@ -39,11 +39,15 @@ export interface ProviderTestResult {
   Error?: string | null;
 }
 
+export interface ResetSetupResult {
+  Restarting: boolean;
+}
+
 export const initApi = {
   getStatus: () => api.get<ServerStatus>('/api/v3/Init/Status'),
   setDefaultUser: (creds: Credentials) => api.post<void>('/api/v3/Init/DefaultUser', creds),
   completeSetup: () => api.post<void>('/api/v3/Init/CompleteSetup'),
-  resetSetup: () => api.post<void>('/api/v3/Init/ResetSetup'),
+  resetSetup: () => api.post<ResetSetupResult>('/api/v3/Init/ResetSetup'),
   getVersion: () => api.get<ComponentVersionSet>('/api/v3/Init/Version'),
   testTmdbKey: (apiKey: string) =>
     api.post<ProviderTestResult>('/api/v3/Init/Provider/TMDB/Test', { ApiKey: apiKey }),
