@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { initApi } from '../api/init';
 import { authApi } from '../api/auth';
@@ -45,22 +46,35 @@ export default function Setup({ onAuthenticated }: { onAuthenticated: () => void
 
   function pollForReady() {
     pollRef.current = setInterval(async () => {
+      let status;
       try {
-        const status = await initApi.getStatus();
-        setStatusMsg(status.StartupMessage ?? `State: ${status.State}`);
-        if (status.State === 'Started') {
-          clearInterval(pollRef.current!);
+        status = await initApi.getStatus();
+      } catch {
+        return; // server still booting, try again next tick
+      }
+
+      setStatusMsg(status.StartupMessage ?? `State: ${status.State}`);
+
+      if (status.State === 'Started') {
+        clearInterval(pollRef.current!);
+        try {
           const resp = await authApi.login({ user: username, pass: password, device: 'WebUI' });
           setApiKey(resp.apikey);
-          onAuthenticated();
+          // flushSync commits the state update synchronously so the route guard
+          // reflects appState='ready' before navigate() fires, preventing the
+          // '/' route from bouncing us back to /setup.
+          flushSync(() => onAuthenticated());
           navigate('/dashboard');
-        } else if (status.State === 'Failed') {
-          clearInterval(pollRef.current!);
-          setError(`Server failed to start: ${status.StartupMessage ?? 'Unknown error'}`);
+        } catch (loginErr) {
+          setError(loginErr instanceof Error ? loginErr.message : 'Login failed after setup — try logging in manually.');
           setStep('credentials');
+          setSubmitting(false);
         }
-      } catch {
-        // server may be restarting — keep polling
+      } else if (status.State === 'Failed') {
+        clearInterval(pollRef.current!);
+        setError(`Server failed to start: ${status.StartupMessage ?? 'Unknown error'}`);
+        setStep('credentials');
+        setSubmitting(false);
       }
     }, 1500);
   }
