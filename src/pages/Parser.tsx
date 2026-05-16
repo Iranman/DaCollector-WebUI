@@ -45,7 +45,7 @@ export default function Parser() {
           <button
             type="submit"
             disabled={loading || !path.trim()}
-            className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-md bg-shoko-accent px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
           >
             <ScanLine size={14} />
             {loading ? 'Parsing…' : 'Parse'}
@@ -110,7 +110,7 @@ export default function Parser() {
 function KindBadge({ kind }: { kind: ParsedFilenameResult['Kind'] }) {
   const cls =
     kind === 'Movie'
-      ? 'bg-blue-600/20 text-blue-400'
+      ? 'bg-shoko-accent/15 text-shoko-accent'
       : kind === 'TvEpisode' || kind === 'MultiEpisodeTvFile'
       ? 'bg-purple-600/20 text-purple-400'
       : 'bg-gray-700/50 text-gray-400';

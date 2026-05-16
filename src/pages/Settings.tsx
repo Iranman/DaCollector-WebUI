@@ -13,6 +13,8 @@ import { ApiToken, tokensApi } from '../api/tokens';
 import { User, CreateOrUpdateUserBody, CreateUserBody, usersApi } from '../api/users';
 import { ReleaseChannel, webuiApi, WebUIBuildMetadata, WebUITheme } from '../api/webui';
 import { plexTargetApi, PlexLibrarySection, PlexServerIdentity } from '../api/plexTarget';
+import { radarrApi, QualityProfile as RadarrProfile, RootFolder as RadarrFolder } from '../api/radarr';
+import { sonarrApi, QualityProfile as SonarrProfile, RootFolder as SonarrFolder } from '../api/sonarr';
 import Button from '../components/ui/Button';
 import { useConfirm } from '../components/ui/ConfirmProvider';
 import SectionHeader from '../components/ui/SectionHeader';
@@ -245,7 +247,7 @@ export default function Settings() {
   if (loading) {
     return (
       <div className="flex justify-center py-24">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
       </div>
     );
   }
@@ -264,7 +266,7 @@ export default function Settings() {
                   onClick={() => void navigateSection(item.id)}
                   className={`block w-full border-l-2 px-4 py-2.5 text-left text-sm transition-colors sm:px-6 ${
                     activeSection === item.id
-                      ? 'border-blue-500 bg-blue-600/20 text-white'
+                      ? 'border-shoko-accent bg-shoko-accent/15 text-white'
                       : 'border-transparent text-gray-400 hover:text-gray-200'
                   }`}
                 >
@@ -407,7 +409,7 @@ function GeneralSection({
     <>
       {reconnecting && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 backdrop-blur-sm">
-          <div className="h-14 w-14 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <div className="h-14 w-14 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
           <p className="mt-6 text-xl font-semibold text-white">Server Restarting</p>
           <p className="mt-2 text-sm text-gray-400">Waiting for the setup wizard to become available…</p>
         </div>
@@ -714,6 +716,18 @@ function IntegrationsSection({
   const [plexError, setPlexError] = useState<string | null>(null);
   const [libraries, setLibraries] = useState<PlexLibrarySection[]>([]);
 
+  const [radarrTesting, setRadarrTesting] = useState(false);
+  const [radarrStatus, setRadarrStatus] = useState<string | null>(null);
+  const [radarrError, setRadarrError] = useState<string | null>(null);
+  const [radarrProfiles, setRadarrProfiles] = useState<RadarrProfile[]>([]);
+  const [radarrFolders, setRadarrFolders] = useState<RadarrFolder[]>([]);
+
+  const [sonarrTesting, setSonarrTesting] = useState(false);
+  const [sonarrStatus, setSonarrStatus] = useState<string | null>(null);
+  const [sonarrError, setSonarrError] = useState<string | null>(null);
+  const [sonarrProfiles, setSonarrProfiles] = useState<SonarrProfile[]>([]);
+  const [sonarrFolders, setSonarrFolders] = useState<SonarrFolder[]>([]);
+
   useEffect(() => {
     if (settings.Plex?.TargetBaseUrl && settings.Plex?.TargetToken) {
       plexTargetApi.getLibraries()
@@ -750,6 +764,46 @@ function IntegrationsSection({
       setPlexError(err instanceof Error ? err.message : 'Connection test failed.');
     } finally {
       setPlexTesting(false);
+    }
+  }
+
+  async function handleRadarrTest() {
+    setRadarrTesting(true);
+    setRadarrStatus(null);
+    setRadarrError(null);
+    try {
+      const status = await radarrApi.test();
+      setRadarrStatus(status);
+      const [profiles, folders] = await Promise.all([
+        radarrApi.getQualityProfiles(),
+        radarrApi.getRootFolders(),
+      ]);
+      setRadarrProfiles(profiles);
+      setRadarrFolders(folders);
+    } catch (err) {
+      setRadarrError(err instanceof Error ? err.message : 'Connection test failed.');
+    } finally {
+      setRadarrTesting(false);
+    }
+  }
+
+  async function handleSonarrTest() {
+    setSonarrTesting(true);
+    setSonarrStatus(null);
+    setSonarrError(null);
+    try {
+      const status = await sonarrApi.test();
+      setSonarrStatus(status);
+      const [profiles, folders] = await Promise.all([
+        sonarrApi.getQualityProfiles(),
+        sonarrApi.getRootFolders(),
+      ]);
+      setSonarrProfiles(profiles);
+      setSonarrFolders(folders);
+    } catch (err) {
+      setSonarrError(err instanceof Error ? err.message : 'Connection test failed.');
+    } finally {
+      setSonarrTesting(false);
     }
   }
 
@@ -829,6 +883,106 @@ function IntegrationsSection({
               <option key={lib.Key} value={lib.Key}>
                 {lib.Title} ({lib.Type})
               </option>
+            ))}
+          </Select>
+        </SettingsRow>
+      </SettingGroup>
+
+      <SettingGroup title="Radarr">
+        {radarrError && <Alert tone="error">{radarrError}</Alert>}
+        <ToggleRow label="Enabled" checked={toBool(settings.Radarr?.Enabled)} onChange={v => updateSetting(['Radarr', 'Enabled'], v)} />
+        <SettingsRow label="Server URL">
+          <TextInput
+            value={settings.Radarr?.BaseUrl ?? ''}
+            onChange={e => updateSetting(['Radarr', 'BaseUrl'], e.target.value)}
+            placeholder="http://127.0.0.1:7878"
+          />
+        </SettingsRow>
+        <SettingsRow label="API Key">
+          <TextInput
+            type="password"
+            value={settings.Radarr?.ApiKey ?? ''}
+            onChange={e => updateSetting(['Radarr', 'ApiKey'], e.target.value)}
+            placeholder="Radarr API key"
+          />
+        </SettingsRow>
+        <SettingsRow label="Connection">
+          <div className="flex items-center justify-end gap-3">
+            {radarrStatus && <span className="text-xs text-emerald-400">{radarrStatus}</span>}
+            <Button size="sm" variant="secondary" disabled={radarrTesting} onClick={handleRadarrTest}>
+              {radarrTesting ? 'Testing…' : 'Test'}
+            </Button>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Quality Profile">
+          <Select
+            value={String(settings.Radarr?.QualityProfileId ?? 0)}
+            onChange={e => updateSetting(['Radarr', 'QualityProfileId'], Number(e.target.value))}
+          >
+            <option value="0">— Select Profile —</option>
+            {radarrProfiles.map(p => (
+              <option key={p.Id} value={String(p.Id)}>{p.Name}</option>
+            ))}
+          </Select>
+        </SettingsRow>
+        <SettingsRow label="Root Folder">
+          <Select
+            value={settings.Radarr?.RootFolderPath ?? ''}
+            onChange={e => updateSetting(['Radarr', 'RootFolderPath'], e.target.value)}
+          >
+            <option value="">— Select Folder —</option>
+            {radarrFolders.map(f => (
+              <option key={f.Id} value={f.Path}>{f.Path}</option>
+            ))}
+          </Select>
+        </SettingsRow>
+      </SettingGroup>
+
+      <SettingGroup title="Sonarr">
+        {sonarrError && <Alert tone="error">{sonarrError}</Alert>}
+        <ToggleRow label="Enabled" checked={toBool(settings.Sonarr?.Enabled)} onChange={v => updateSetting(['Sonarr', 'Enabled'], v)} />
+        <SettingsRow label="Server URL">
+          <TextInput
+            value={settings.Sonarr?.BaseUrl ?? ''}
+            onChange={e => updateSetting(['Sonarr', 'BaseUrl'], e.target.value)}
+            placeholder="http://127.0.0.1:8989"
+          />
+        </SettingsRow>
+        <SettingsRow label="API Key">
+          <TextInput
+            type="password"
+            value={settings.Sonarr?.ApiKey ?? ''}
+            onChange={e => updateSetting(['Sonarr', 'ApiKey'], e.target.value)}
+            placeholder="Sonarr API key"
+          />
+        </SettingsRow>
+        <SettingsRow label="Connection">
+          <div className="flex items-center justify-end gap-3">
+            {sonarrStatus && <span className="text-xs text-emerald-400">{sonarrStatus}</span>}
+            <Button size="sm" variant="secondary" disabled={sonarrTesting} onClick={handleSonarrTest}>
+              {sonarrTesting ? 'Testing…' : 'Test'}
+            </Button>
+          </div>
+        </SettingsRow>
+        <SettingsRow label="Quality Profile">
+          <Select
+            value={String(settings.Sonarr?.QualityProfileId ?? 0)}
+            onChange={e => updateSetting(['Sonarr', 'QualityProfileId'], Number(e.target.value))}
+          >
+            <option value="0">— Select Profile —</option>
+            {sonarrProfiles.map(p => (
+              <option key={p.Id} value={String(p.Id)}>{p.Name}</option>
+            ))}
+          </Select>
+        </SettingsRow>
+        <SettingsRow label="Root Folder">
+          <Select
+            value={settings.Sonarr?.RootFolderPath ?? ''}
+            onChange={e => updateSetting(['Sonarr', 'RootFolderPath'], e.target.value)}
+          >
+            <option value="">— Select Folder —</option>
+            {sonarrFolders.map(f => (
+              <option key={f.Id} value={f.Path}>{f.Path}</option>
             ))}
           </Select>
         </SettingsRow>
@@ -1252,7 +1406,7 @@ function WebUISettingsSection() {
               <div key={theme.ID} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Palette size={14} className="text-blue-400" />
+                    <Palette size={14} className="text-shoko-accent" />
                     <span className="text-sm font-medium text-gray-100">{theme.Name}</span>
                     {theme.IsInstalled && <UserBadge color="blue">Installed</UserBadge>}
                     {theme.IsPreview && <UserBadge color="gray">Preview</UserBadge>}
@@ -1675,7 +1829,7 @@ function UserManagementSection() {
                     type="button"
                     onClick={() => openPasswordChange(user.ID)}
                     title="Change password"
-                    className="rounded p-1.5 text-gray-400 hover:text-blue-400 transition-colors"
+                    className="rounded p-1.5 text-gray-400 hover:text-shoko-accent transition-colors"
                   >
                     <KeyRound size={14} />
                   </button>
@@ -1683,7 +1837,7 @@ function UserManagementSection() {
                     type="button"
                     onClick={() => editingId === user.ID ? closeEdit() : openEdit(user)}
                     title="Edit user"
-                    className="rounded p-1.5 text-gray-400 hover:text-blue-400 transition-colors"
+                    className="rounded p-1.5 text-gray-400 hover:text-shoko-accent transition-colors"
                   >
                     <Pencil size={14} />
                   </button>
@@ -1835,7 +1989,7 @@ function UserManagementSection() {
 
 function UserBadge({ color, children }: { color: 'blue' | 'gray'; children: React.ReactNode }) {
   const cls = color === 'blue'
-    ? 'bg-blue-600/20 text-blue-400'
+    ? 'bg-shoko-accent/15 text-shoko-accent'
     : 'bg-gray-700/50 text-gray-400';
   return (
     <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>
@@ -1867,7 +2021,7 @@ function AvatarPreview({
     );
   }
   return (
-    <span className={`grid ${classes} shrink-0 place-items-center rounded-full bg-blue-500/20 font-semibold text-blue-400`}>
+    <span className={`grid ${classes} shrink-0 place-items-center rounded-full bg-shoko-accent/15 font-semibold text-shoko-accent`}>
       {fallback}
     </span>
   );
@@ -1934,7 +2088,7 @@ function ReleaseInfoProvidersPanel() {
       <div className="rounded-md border border-gray-800/70 bg-gray-950/40">
         <div className="flex flex-col gap-3 border-b border-gray-800/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Info size={16} className="text-blue-400" />
+            <Info size={16} className="text-shoko-accent" />
             <div>
               <div className="text-sm font-medium text-gray-100">Release metadata providers</div>
               <div className="text-xs text-gray-500">Read-only service status from ReleaseInfoController.</div>
@@ -2006,7 +2160,7 @@ function ReleaseProviderPill({
   tone: 'blue' | 'gray' | 'yellow';
 }) {
   const cls = {
-    blue: 'border-blue-500/40 bg-blue-500/10 text-blue-300',
+    blue: 'border-shoko-accent/40 bg-shoko-accent/10 text-shoko-accent',
     gray: 'border-gray-700/70 bg-gray-900/80 text-gray-400',
     yellow: 'border-yellow-500/40 bg-yellow-950/30 text-yellow-200',
   }[tone];
@@ -2076,7 +2230,7 @@ function DatabaseBackupsPanel() {
       <div className="rounded-md border border-gray-800/70 bg-gray-950/40">
         <div className="flex flex-col gap-3 border-b border-gray-800/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <Archive size={16} className="text-blue-400" />
+            <Archive size={16} className="text-shoko-accent" />
             <div>
               <div className="text-sm font-medium text-gray-100">Database backups</div>
               <div className="text-xs text-gray-500">Read-only list from the server backup directory.</div>
@@ -2441,7 +2595,7 @@ function Alert({ tone, children }: { tone: 'error' | 'success' | 'warning'; chil
 function InlineSpinner() {
   return (
     <div className="flex justify-center py-5">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-shoko-accent border-t-transparent" />
     </div>
   );
 }

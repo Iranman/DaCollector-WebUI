@@ -251,7 +251,7 @@ export default function Utilities() {
       <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard label="Waiting" value={status?.WaitingCount ?? '-'} tone="text-gray-100" />
         <StatCard label="Blocked" value={status?.BlockedCount ?? '-'} tone="text-yellow-300" />
-        <StatCard label="Total" value={status?.TotalCount ?? '-'} tone="text-blue-300" />
+        <StatCard label="Total" value={status?.TotalCount ?? '-'} tone="text-shoko-accent" />
         <StatCard label="Threads" value={status?.ThreadCount ?? '-'} tone="text-gray-100" />
         <StatCard label="State" value={queueRunning ? 'Running' : 'Paused'} tone={queueRunning ? 'text-emerald-300' : 'text-yellow-300'} />
       </div>
@@ -265,12 +265,12 @@ export default function Utilities() {
                   value={search}
                   onChange={event => setSearch(event.target.value)}
                   placeholder="Search jobs..."
-                  className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
+                  className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:border-shoko-accent focus:outline-none"
                 />
                 <select
                   value={typeFilter}
                   onChange={event => setTypeFilter(event.target.value)}
-                  className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-100 focus:border-blue-500 focus:outline-none"
+                  className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-100 focus:border-shoko-accent focus:outline-none"
                 >
                   <option>All</option>
                   {Object.keys(types).sort().map(type => (
@@ -280,7 +280,7 @@ export default function Utilities() {
                 <select
                   value={sectionFilter}
                   onChange={event => setSectionFilter(event.target.value as QueueSection | 'all')}
-                  className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-100 focus:border-blue-500 focus:outline-none"
+                  className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-100 focus:border-shoko-accent focus:outline-none"
                 >
                   <option value="all">All sections</option>
                   <option value="running">Running</option>
@@ -379,7 +379,7 @@ function HashingPanel({
     <div className="rounded-md border border-gray-700/50 bg-gray-900/40">
       <div className="flex items-center justify-between gap-3 border-b border-gray-700/50 px-4 py-3">
         <div className="flex items-center gap-2">
-          <Fingerprint size={15} className="text-blue-400" />
+          <Fingerprint size={15} className="text-shoko-accent" />
           <h2 className="text-sm font-semibold text-gray-200">Hashing Status</h2>
         </div>
         {loading && <RefreshCw size={13} className="animate-spin text-gray-500" />}
@@ -533,7 +533,7 @@ function QueueGroup({
                 type="button"
                 onClick={() => onSelect(item.Key)}
                 className={`block w-full px-4 py-3 text-left transition-colors ${
-                  selectedKey === item.Key ? 'bg-blue-600/15' : 'hover:bg-white/5'
+                  selectedKey === item.Key ? 'bg-shoko-accent/10' : 'hover:bg-white/5'
                 }`}
               >
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -641,7 +641,7 @@ function AdminButton({
 
 function StatusPill({ label, tone }: { label: string; tone: 'blue' | 'yellow' }) {
   const classes = tone === 'blue'
-    ? 'bg-blue-600/20 text-blue-300'
+    ? 'bg-shoko-accent/15 text-shoko-accent'
     : 'bg-yellow-900/40 text-yellow-300';
   return (
     <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] ${classes}`}>

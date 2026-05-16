@@ -30,6 +30,8 @@ import {
 } from '../api/collections';
 import { dacollectorStatusApi, PlexTargetConnectionStatus } from '../api/dacollectorStatus';
 import { ApiError } from '../api/client';
+import { radarrApi } from '../api/radarr';
+import { sonarrApi } from '../api/sonarr';
 import Button from '../components/ui/Button';
 import { useConfirm } from '../components/ui/ConfirmProvider';
 import Select from '../components/ui/Select';
@@ -369,7 +371,7 @@ export default function Collections() {
       </div>
 
       {notice && (
-        <div className="app-card px-4 py-3 text-sm text-blue-300">{notice}</div>
+        <div className="app-card px-4 py-3 text-sm text-shoko-accent">{notice}</div>
       )}
       {error && (
         <div className="app-card rounded-md border-red-700/50 px-4 py-3 text-sm text-red-400">
@@ -384,7 +386,7 @@ export default function Collections() {
 
       {loading ? (
         <div className="flex justify-center py-16">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
         </div>
       ) : collections.length === 0 ? (
         <div className="app-card rounded-md px-5 py-16 text-center">
@@ -732,7 +734,7 @@ function StatusMetric({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className={active ? 'text-blue-400' : 'text-gray-600'}>{icon}</span>
+      <span className={active ? 'text-shoko-accent' : 'text-gray-600'}>{icon}</span>
       <span className="min-w-0">
         <span className="block text-xs uppercase tracking-wide text-gray-500">{label}</span>
         <span className="block truncate text-sm font-medium text-gray-100">{value}</span>
@@ -791,19 +793,66 @@ function SyncResultPanel({ result, onClose }: { result: CollectionSyncResult; on
 }
 
 function PreviewItemList({ items }: { items: CollectionPreviewItem[] }) {
+  const [requesting, setRequesting] = useState<Record<number, boolean>>({});
+  const [requestResults, setRequestResults] = useState<Record<number, { ok: boolean; msg: string }>>({});
+
+  async function handleRequest(index: number, item: CollectionPreviewItem) {
+    const ext = item.ExternalID;
+    if (!ext?.Value) return;
+    const id = parseInt(ext.Value, 10);
+    if (isNaN(id)) return;
+
+    setRequesting(r => ({ ...r, [index]: true }));
+    setRequestResults(r => ({ ...r, [index]: { ok: false, msg: '' } }));
+    try {
+      const kind = Number(ext.Kind);
+      if (kind === 1) {
+        await radarrApi.requestMovie(id);
+        setRequestResults(r => ({ ...r, [index]: { ok: true, msg: 'Sent to Radarr' } }));
+      } else if (kind === 2) {
+        await sonarrApi.requestShow(id);
+        setRequestResults(r => ({ ...r, [index]: { ok: true, msg: 'Sent to Sonarr' } }));
+      }
+    } catch (err) {
+      setRequestResults(r => ({ ...r, [index]: { ok: false, msg: err instanceof Error ? err.message : 'Request failed' } }));
+    } finally {
+      setRequesting(r => ({ ...r, [index]: false }));
+    }
+  }
+
   return (
-    <div className="max-h-80 divide-y divide-gray-800/50 overflow-y-auto">
+    <div className="max-h-96 divide-y divide-gray-800/50 overflow-y-auto">
       {items.length === 0 ? (
         <p className="px-5 py-6 text-center text-sm text-gray-500">No items matched.</p>
       ) : (
-        items.slice(0, 75).map((item, index) => (
-          <div key={`${item.Title}-${index}`} className="px-5 py-3">
-            <p className="text-sm text-gray-200">{item.Title || 'Untitled'}</p>
-            <p className="mt-1 text-xs text-gray-500">
-              {externalIdLabel(item.ExternalID)}{item.Summary ? ` - ${item.Summary}` : ''}
-            </p>
-          </div>
-        ))
+        items.slice(0, 75).map((item, index) => {
+          const kind = Number(item.ExternalID?.Kind);
+          const canRequest = item.ExternalID?.Value && (kind === 1 || kind === 2);
+          const result = requestResults[index];
+          return (
+            <div key={`${item.Title}-${index}`} className="flex items-center gap-3 px-5 py-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm text-gray-200">{item.Title || 'Untitled'}</p>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {externalIdLabel(item.ExternalID)}{item.Summary ? ` - ${item.Summary}` : ''}
+                </p>
+                {result && (
+                  <p className={`mt-0.5 text-xs ${result.ok ? 'text-emerald-400' : 'text-red-400'}`}>{result.msg}</p>
+                )}
+              </div>
+              {canRequest && (
+                <button
+                  type="button"
+                  disabled={requesting[index]}
+                  onClick={() => handleRequest(index, item)}
+                  className="shrink-0 rounded bg-shoko-accent/15 border border-shoko-accent/40 px-2.5 py-1 text-xs font-medium text-shoko-accent transition-colors hover:bg-shoko-accent/25 disabled:opacity-50"
+                >
+                  {requesting[index] ? '…' : kind === 1 ? 'Radarr' : 'Sonarr'}
+                </button>
+              )}
+            </div>
+          );
+        })
       )}
       {items.length > 75 && (
         <p className="px-5 py-3 text-xs text-gray-500">{items.length - 75} more items not shown.</p>
@@ -860,7 +909,7 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
 
 function StatePill({ active, children }: { active: boolean; children: ReactNode }) {
   return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${active ? 'bg-blue-600/20 text-blue-400' : 'bg-gray-800 text-gray-500'}`}>
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${active ? 'bg-shoko-accent/20 text-shoko-accent' : 'bg-gray-800 text-gray-500'}`}>
       {children}
     </span>
   );

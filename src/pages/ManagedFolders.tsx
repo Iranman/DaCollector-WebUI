@@ -204,7 +204,7 @@ export default function ManagedFolders() {
       {/* Folder list */}
       {loading && folders.length === 0 ? (
         <div className="flex items-center justify-center py-16">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
         </div>
       ) : folders.length === 0 && !loading ? (
         <div className="app-card rounded-md px-5 py-12 text-center">
@@ -217,7 +217,7 @@ export default function ManagedFolders() {
           {folders.map(folder => (
             <div key={folder.ID}>
               <div className="flex items-start gap-4 px-5 py-4">
-                <FolderOpen size={18} className="mt-0.5 shrink-0 text-blue-400" />
+                <FolderOpen size={18} className="mt-0.5 shrink-0 text-shoko-accent" />
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -248,7 +248,7 @@ export default function ManagedFolders() {
                   <button
                     onClick={() => formMode?.kind === 'edit' && formMode.folder.ID === folder.ID ? closeForm() : openEdit(folder)}
                     title="Edit folder"
-                    className="rounded p-1.5 text-gray-400 hover:text-blue-400 transition-colors"
+                    className="rounded p-1.5 text-gray-400 hover:text-shoko-accent transition-colors"
                   >
                     <Pencil size={14} />
                   </button>
@@ -385,7 +385,7 @@ function FolderForm({
 
 function Badge({ color, children }: { color: 'blue' | 'gray'; children: React.ReactNode }) {
   const cls = color === 'blue'
-    ? 'bg-blue-600/20 text-blue-400'
+    ? 'bg-shoko-accent/15 text-shoko-accent'
     : 'bg-gray-700/50 text-gray-400';
   return (
     <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${cls}`}>

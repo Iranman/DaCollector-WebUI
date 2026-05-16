@@ -31,7 +31,7 @@ const LEVEL_STYLES: Record<string, string> = {
 const LEVEL_BADGE: Record<string, string> = {
   Trace: 'bg-gray-800 text-gray-500',
   Debug: 'bg-gray-700 text-gray-400',
-  Info: 'bg-blue-900/40 text-blue-300',
+  Info: 'bg-shoko-accent/10 text-shoko-accent',
   Warn: 'bg-yellow-900/40 text-yellow-400',
   Error: 'bg-red-900/40 text-red-400',
   Fatal: 'bg-red-800/60 text-red-300',
@@ -282,19 +282,19 @@ export default function Log() {
               placeholder="Filter messages..."
               value={filters.text}
               onChange={event => updateFilter('text', event.target.value)}
-              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-shoko-accent focus:outline-none"
             />
             <input
               type="text"
               placeholder="Logger..."
               value={filters.logger}
               onChange={event => updateFilter('logger', event.target.value)}
-              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 placeholder-gray-600 focus:border-shoko-accent focus:outline-none"
             />
             <select
               value={filters.level}
               onChange={event => updateFilter('level', event.target.value)}
-              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 focus:border-shoko-accent focus:outline-none"
             >
               {levels.map(level => (
                 <option key={level}>{level}</option>
@@ -308,7 +308,7 @@ export default function Log() {
                 type="checkbox"
                 checked={filters.exceptionOnly}
                 onChange={event => updateFilter('exceptionOnly', event.target.checked)}
-                className="h-4 w-4 rounded border-gray-600 bg-gray-800 text-blue-600"
+                className="h-4 w-4 rounded border-gray-600 bg-gray-800 accent-shoko-accent"
               />
               Exceptions only
             </label>
@@ -322,7 +322,7 @@ export default function Log() {
             <select
               value=""
               onChange={event => applySavedFilter(event.target.value)}
-              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-1.5 text-xs text-gray-300 focus:border-blue-500 focus:outline-none"
+              className="rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-1.5 text-xs text-gray-300 focus:border-shoko-accent focus:outline-none"
             >
               <option value="">Saved filters</option>
               {savedFilters.map(filter => (
@@ -353,7 +353,7 @@ export default function Log() {
 
           {loading ? (
             <div className="flex justify-center py-12">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-shoko-accent border-t-transparent" />
             </div>
           ) : entries.length === 0 ? (
             <div className="px-5 py-8 text-center text-sm text-gray-500">No log entries found.</div>
@@ -395,7 +395,7 @@ export default function Log() {
               <select
                 value={selectedFileID}
                 onChange={event => setSelectedFileID(event.target.value)}
-                className="w-full rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 focus:border-blue-500 focus:outline-none"
+                className="w-full rounded-md border border-gray-700/50 bg-gray-800/70 px-3 py-2 text-sm text-gray-200 focus:border-shoko-accent focus:outline-none"
               >
                 {files.map(file => (
                   <option key={file.ID} value={file.ID}>

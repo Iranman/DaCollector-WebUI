@@ -14,12 +14,12 @@ export default function Toggle({ checked, onChange, disabled = false, title }: T
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`grid h-7 w-7 place-items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-        checked ? 'text-blue-500 hover:text-blue-400' : 'text-gray-500 hover:text-gray-300'
+        checked ? 'text-shoko-accent hover:text-shoko-accent/80' : 'text-gray-500 hover:text-gray-300'
       }`}
     >
       <span className="sr-only">{checked ? 'Enabled' : 'Disabled'}</span>
       {checked ? (
-        <span className="grid h-5 w-5 place-items-center rounded-full border-2 border-blue-500 text-[11px] leading-none text-blue-500">✓</span>
+        <span className="grid h-5 w-5 place-items-center rounded-full border-2 border-shoko-accent text-[11px] leading-none text-shoko-accent">✓</span>
       ) : (
         <span className="h-5 w-5 rounded-full border-2 border-current" />
       )}

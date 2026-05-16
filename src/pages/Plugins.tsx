@@ -551,7 +551,7 @@ function SearchBox({
           onChange={event => onChange(event.target.value)}
           onKeyDown={event => { if (event.key === 'Enter') onSearch(); }}
           placeholder={placeholder}
-          className="w-full rounded-md border border-gray-700/50 bg-gray-800/70 py-2 pl-9 pr-3 text-sm text-gray-200 placeholder-gray-600 focus:border-blue-500 focus:outline-none"
+          className="w-full rounded-md border border-gray-700/50 bg-gray-800/70 py-2 pl-9 pr-3 text-sm text-gray-200 placeholder-gray-600 focus:border-shoko-accent focus:outline-none"
         />
       </div>
       <button onClick={onSearch} className="admin-secondary-button">
@@ -576,7 +576,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
       onClick={onClick}
       className={`rounded-md border px-3 py-2 text-sm transition-colors ${
         active
-          ? 'border-blue-500 bg-blue-600 text-white'
+          ? 'border-shoko-accent bg-shoko-accent text-black'
           : 'border-gray-700/50 bg-gray-900/40 text-gray-400 hover:text-white'
       }`}
     >
@@ -587,7 +587,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 
 function StatusPill({ label, tone }: { label: string; tone: 'blue' | 'green' | 'yellow' | 'red' | 'gray' }) {
   const classes = {
-    blue: 'bg-blue-600/20 text-blue-300',
+    blue: 'bg-shoko-accent/15 text-shoko-accent',
     green: 'bg-emerald-600/20 text-emerald-300',
     yellow: 'bg-yellow-900/40 text-yellow-300',
     red: 'bg-red-900/40 text-red-300',

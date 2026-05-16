@@ -59,6 +59,20 @@ export interface ServerSettings {
   Database?: {
     Type?: string;
   };
+  Radarr?: {
+    Enabled?: boolean;
+    BaseUrl?: string;
+    ApiKey?: string;
+    QualityProfileId?: number;
+    RootFolderPath?: string;
+  };
+  Sonarr?: {
+    Enabled?: boolean;
+    BaseUrl?: string;
+    ApiKey?: string;
+    QualityProfileId?: number;
+    RootFolderPath?: string;
+  };
 }
 
 type PatchOp = { op: 'replace'; path: string; value: unknown };

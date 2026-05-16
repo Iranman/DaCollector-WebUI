@@ -296,7 +296,7 @@ export default function MediaDetail() {
 
       {loadState === 'loading' && !detail ? (
         <div className="flex items-center justify-center py-16">
-          <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <div className="h-9 w-9 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
         </div>
       ) : error ? (
         <div className="app-card px-4 py-3 text-sm text-red-400">{error}</div>
@@ -499,7 +499,7 @@ function TmdbSearchPanel({
           type="button"
           onClick={onSearch}
           disabled={searching || !query.trim()}
-          className="rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-md bg-shoko-accent px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-shoko-accent/85 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {searching ? '…' : 'Go'}
         </button>
@@ -565,7 +565,7 @@ function OrderingPanel({
             onClick={() => onSetPreferred(item.IsDefault ? 'default' : item.OrderingID)}
             className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed ${
               item.IsPreferred
-                ? 'border-blue-500/60 bg-blue-600/20 text-white'
+                ? 'border-shoko-accent/60 bg-shoko-accent/15 text-white'
                 : 'border-gray-800 bg-gray-950/35 text-gray-300 hover:border-gray-700 hover:bg-gray-900/80'
             }`}
           >
@@ -616,7 +616,7 @@ function TvdbLinkPanel({
           type="button"
           disabled={busyAction != null}
           onClick={onLink}
-          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-1.5 rounded-md bg-shoko-accent px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
         >
           <Link2 size={14} />
           Link
@@ -689,7 +689,7 @@ function ShowEpisodes({
         {episodes.map(episode => (
           <div key={episode.ProviderID} className="rounded-md border border-gray-800/80 bg-gray-950/30 px-4 py-3">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold text-blue-400">
+              <span className="text-xs font-semibold text-shoko-accent">
                 S{episode.SeasonNumber} E{episode.EpisodeNumber}
               </span>
               <span className="text-sm font-medium text-gray-100">{episode.Title}</span>
@@ -851,7 +851,7 @@ function CandidateList({
                 type="button"
                 disabled={busyAction != null}
                 onClick={() => onApprove(candidate)}
-                className="rounded bg-blue-500 p-1.5 text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+                className="rounded bg-shoko-accent p-1.5 text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
                 title="Approve"
               >
                 <Check size={14} />
@@ -932,7 +932,7 @@ function StatusMessages({
   if (!actionMessage && !actionError && !contextError) return null;
   return (
     <div className="space-y-2">
-      {actionMessage && <div className="app-card px-4 py-3 text-sm text-blue-300">{actionMessage}</div>}
+      {actionMessage && <div className="app-card px-4 py-3 text-sm text-shoko-accent">{actionMessage}</div>}
       {actionError && <div className="app-card px-4 py-3 text-sm text-red-400">{actionError}</div>}
       {contextError && <div className="app-card px-4 py-3 text-sm text-yellow-300">{contextError}</div>}
     </div>

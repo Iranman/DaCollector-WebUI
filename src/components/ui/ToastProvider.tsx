@@ -82,7 +82,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
     success: 'border-emerald-500/50 text-emerald-300',
     error: 'border-red-500/60 text-red-300',
     warning: 'border-yellow-500/60 text-yellow-300',
-    info: 'border-blue-500/60 text-blue-300',
+    info: 'border-shoko-accent/60 text-shoko-accent',
   }[toast.tone];
 
   return (

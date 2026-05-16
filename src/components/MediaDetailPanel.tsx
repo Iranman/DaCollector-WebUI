@@ -207,7 +207,7 @@ export default function MediaDetailPanel({
               onClick={() => setTab(t.id)}
               className={`-mb-px border-b-2 px-4 py-2.5 text-xs font-medium uppercase tracking-wide transition-colors ${
                 tab === t.id
-                  ? 'border-blue-500 text-white'
+                  ? 'border-shoko-accent text-white'
                   : 'border-transparent text-gray-500 hover:text-gray-300'
               }`}
             >
@@ -227,7 +227,7 @@ export default function MediaDetailPanel({
           {tab === 'overview' && (
             loading && !detail ? (
               <div className="flex items-center justify-center py-12">
-                <div className="h-7 w-7 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+                <div className="h-7 w-7 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
               </div>
             ) : detail ? (
               <OverviewTab
@@ -375,7 +375,7 @@ function OverviewTab({
             </button>
           )}
         </div>
-        {msg && <p className="mt-2 text-xs text-blue-300">{msg}</p>}
+        {msg && <p className="mt-2 text-xs text-shoko-accent">{msg}</p>}
         {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
       </div>
     </div>
@@ -458,13 +458,13 @@ function RematchTab({
           type="button"
           onClick={search}
           disabled={searching || !query.trim()}
-          className="rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+          className="rounded-md bg-shoko-accent px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
         >
           {searching ? '…' : <Search size={14} />}
         </button>
       </div>
 
-      {msg && <p className="text-xs text-blue-300">{msg}</p>}
+      {msg && <p className="text-xs text-shoko-accent">{msg}</p>}
       {err && <p className="text-xs text-red-400">{err}</p>}
 
       <div className="space-y-2">
@@ -631,7 +631,7 @@ function CollectionsTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="h-6 w-6 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
       </div>
     );
   }
@@ -650,7 +650,7 @@ function CollectionsTab({
         ID-based rules are shown here — items included via other builder rules are not listed.
       </p>
 
-      {msg && <p className="text-xs text-blue-300">{msg}</p>}
+      {msg && <p className="text-xs text-shoko-accent">{msg}</p>}
       {err && <p className="text-xs text-red-400">{err}</p>}
 
       {memberCollections.length > 0 && (
@@ -804,14 +804,14 @@ function FilesTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <div className="h-6 w-6 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+        <div className="h-6 w-6 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
       </div>
     );
   }
 
   return (
     <div className="space-y-4 p-4">
-      {msg && <p className="text-xs text-blue-300">{msg}</p>}
+      {msg && <p className="text-xs text-shoko-accent">{msg}</p>}
       {err && <p className="text-xs text-red-400">{err}</p>}
 
       {files.length === 0 ? (
@@ -876,7 +876,7 @@ function FilesTab({
                   <button
                     disabled={busy != null}
                     onClick={() => applyRename(file.ID)}
-                    className="inline-flex items-center gap-1.5 rounded bg-blue-600 px-2.5 py-1 text-xs text-white transition-colors hover:bg-blue-500 disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded bg-shoko-accent px-2.5 py-1 text-xs text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
                   >
                     <Check size={11} />
                     Apply rename

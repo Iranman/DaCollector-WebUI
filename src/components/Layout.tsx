@@ -139,7 +139,7 @@ export default function Layout() {
                 type="button"
                 title="Account"
                 onClick={() => { setProfileOpen(o => !o); setNotificationOpen(false); setMobileOpen(false); }}
-                className={`flex items-center rounded-full transition ${profileOpen ? 'ring-2 ring-blue-500' : 'ring-1 ring-transparent hover:ring-gray-600'}`}
+                className={`flex items-center rounded-full transition ${profileOpen ? 'ring-2 ring-shoko-accent' : 'ring-1 ring-transparent hover:ring-gray-600'}`}
               >
                 <UserAvatar username={username} avatar={currentUser?.Avatar} sizeClass="h-9 w-9" />
               </button>
@@ -161,7 +161,7 @@ export default function Layout() {
               to="/settings"
               title="Settings"
               className={({ isActive }) =>
-                `inline-flex rounded-md p-2 transition-colors ${isActive ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`
+                `inline-flex rounded-md p-2 transition-colors ${isActive ? 'bg-shoko-accent/15 text-shoko-accent' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`
               }
             >
               <Settings size={19} />
@@ -172,11 +172,11 @@ export default function Layout() {
                 type="button"
                 title="Notifications"
                 onClick={() => { setNotificationOpen(o => !o); setProfileOpen(false); setMobileOpen(false); }}
-                className={`relative rounded-md p-2 transition-colors ${notificationOpen ? 'bg-blue-600/20 text-blue-400' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                className={`relative rounded-md p-2 transition-colors ${notificationOpen ? 'bg-shoko-accent/15 text-shoko-accent' : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
               >
                 <Bell size={19} />
                 {notificationCount > 0 && (
-                  <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white">
+                  <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-shoko-accent px-1 text-[10px] font-semibold leading-none text-black">
                     {notificationCount > 99 ? '99+' : notificationCount}
                   </span>
                 )}
@@ -195,7 +195,7 @@ export default function Layout() {
             <button
               type="button"
               onClick={() => { setMobileOpen(open => !open); setNotificationOpen(false); setProfileOpen(false); }}
-              className="fixed left-16 top-4 z-50 rounded-md border border-blue-500/60 bg-black/80 p-1.5 text-blue-500 transition-colors hover:text-blue-400 lg:hidden"
+              className="fixed left-16 top-4 z-50 rounded-md border border-shoko-accent/60 bg-black/80 p-1.5 text-shoko-accent transition-colors hover:text-shoko-accent/80 lg:hidden"
               aria-expanded={mobileOpen}
               aria-label="Toggle navigation"
             >
@@ -248,7 +248,7 @@ function AccountMenu({
         <div className="min-w-0">
           <p className="truncate text-base font-semibold text-white">{username}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-gray-500">
-            {isAdmin ? <CheckCircle2 size={13} className="text-blue-400" /> : <UserCircle size={13} />}
+            {isAdmin ? <CheckCircle2 size={13} className="text-shoko-accent" /> : <UserCircle size={13} />}
             {isAdmin ? 'Administrator' : 'User'}
           </p>
         </div>
@@ -267,7 +267,7 @@ function AccountMenu({
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={avatarSaving}
-          className="flex items-center justify-center gap-2 rounded-md border border-gray-700 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-blue-500/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex items-center justify-center gap-2 rounded-md border border-gray-700 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-shoko-accent/60 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           <Camera size={15} />
           {avatarSaving ? 'Uploading...' : 'Upload Profile Image'}
@@ -275,7 +275,7 @@ function AccountMenu({
         <NavLink
           to="/settings/profile"
           onClick={onClose}
-          className="flex items-center justify-center gap-2 rounded-md border border-gray-700 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-blue-500/60 hover:text-white"
+          className="flex items-center justify-center gap-2 rounded-md border border-gray-700 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-shoko-accent/60 hover:text-white"
         >
           <Settings size={15} />
           Account Settings
@@ -335,14 +335,14 @@ function NotificationMenu({
           {updateLabels.length > 0 && (
             <NotificationSection title="Updates">
               {updateLabels.map(label => (
-                <NotificationRow key={label} icon={<DownloadCloud size={14} className="text-blue-400" />}>
+                <NotificationRow key={label} icon={<DownloadCloud size={14} className="text-shoko-accent" />}>
                   {label}
                 </NotificationRow>
               ))}
               <NavLink
                 to="/settings/web-ui"
                 onClick={onClose}
-                className="mx-4 mb-3 inline-flex text-xs font-medium text-blue-400 hover:text-blue-300"
+                className="mx-4 mb-3 inline-flex text-xs font-medium text-shoko-accent hover:text-shoko-accent/80"
               >
                 Open update settings
               </NavLink>
@@ -364,7 +364,7 @@ function NotificationMenu({
             <NavLink
               to="/utilities"
               onClick={onClose}
-              className="mx-4 mb-3 inline-flex text-xs font-medium text-blue-400 hover:text-blue-300"
+              className="mx-4 mb-3 inline-flex text-xs font-medium text-shoko-accent hover:text-shoko-accent/80"
             >
               View full queue
             </NavLink>
@@ -407,7 +407,7 @@ function UserAvatar({ avatar, username, sizeClass }: { avatar?: string; username
   }
 
   return (
-    <span className={`${sizeClass} grid shrink-0 place-items-center rounded-full bg-blue-500 text-sm font-semibold text-black`}>
+    <span className={`${sizeClass} grid shrink-0 place-items-center rounded-full bg-shoko-accent text-sm font-semibold text-black`}>
       {initial}
     </span>
   );
@@ -434,7 +434,7 @@ function DesktopLink({ currentPath, item }: { currentPath: string; item: NavItem
       className={({ isActive }) =>
         `flex h-9 items-center gap-2 rounded-md px-3 text-sm font-medium transition-colors ${
           isActive || isTopLevelActive(to, currentPath)
-            ? 'bg-blue-600/20 text-white'
+            ? 'bg-shoko-accent/15 text-white'
             : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
         }`
       }
@@ -463,7 +463,7 @@ function MobileLink({ currentPath, item, onNavigate }: { currentPath: string; it
       className={() =>
         `flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors ${
           isTopLevelActive(to, currentPath)
-            ? 'bg-blue-600/20 text-white'
+            ? 'bg-shoko-accent/15 text-white'
             : 'text-gray-400 hover:bg-white/5 hover:text-gray-200'
         }`
       }

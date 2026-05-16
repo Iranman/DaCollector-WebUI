@@ -155,7 +155,7 @@ export default function Media() {
             type="button"
             onClick={scanAllMatches}
             disabled={loading}
-            className="inline-flex items-center gap-1.5 rounded-md bg-blue-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-md bg-shoko-accent px-3 py-1.5 text-sm font-medium text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
             Scan unmatched
@@ -167,7 +167,7 @@ export default function Media() {
       </div>
 
       {actionMessage && (
-        <div className="app-card px-4 py-3 text-sm text-blue-300">{actionMessage}</div>
+        <div className="app-card px-4 py-3 text-sm text-shoko-accent">{actionMessage}</div>
       )}
 
       {error && (
@@ -178,7 +178,7 @@ export default function Media() {
       <div className="app-card rounded-md divide-y divide-gray-800/50">
         {loading && !movies.length && !shows.length ? (
           <div className="flex items-center justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
           </div>
         ) : tab === 'movies' ? (
           movies.length === 0 ? (
@@ -268,7 +268,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
       onClick={onClick}
       className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
         active
-          ? 'border-blue-500 text-white'
+          ? 'border-shoko-accent text-white'
           : 'border-transparent text-gray-400 hover:text-gray-200'
       }`}
     >
@@ -378,7 +378,7 @@ function CandidateRow({
             type="button"
             onClick={onApprove}
             disabled={busy}
-            className="rounded bg-blue-500 p-2 text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+            className="rounded bg-shoko-accent p-2 text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
             title="Approve match"
           >
             <Check size={15} />

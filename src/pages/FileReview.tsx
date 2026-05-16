@@ -779,7 +779,7 @@ export default function FileReview() {
       </div>
 
       {notice && (
-        <div className="app-card px-4 py-3 text-sm text-blue-300">{notice}</div>
+        <div className="app-card px-4 py-3 text-sm text-shoko-accent">{notice}</div>
       )}
       {error && (
         <div className="app-card rounded-md border-red-700/50 px-4 py-3 text-sm text-red-400">{error}</div>
@@ -949,7 +949,7 @@ function TabButton({
       onClick={onClick}
       className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
         active
-          ? 'border-blue-500 text-white'
+          ? 'border-shoko-accent text-white'
           : 'border-transparent text-gray-400 hover:text-gray-200'
       }`}
     >
@@ -974,7 +974,7 @@ function SegmentButton({
       onClick={onClick}
       className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
         active
-          ? 'border-blue-500/70 bg-blue-600/20 text-white'
+          ? 'border-shoko-accent/70 bg-shoko-accent/15 text-white'
           : 'border-gray-700 bg-gray-900/50 text-gray-400 hover:text-gray-200'
       }`}
     >
@@ -1666,7 +1666,7 @@ function SeriesSummaryList({
         ) : (
           series.map(item => (
             <div key={item.IDs.ID} className="flex items-start gap-3 px-5 py-4">
-              <FolderOpen size={17} className="mt-0.5 shrink-0 text-blue-400" />
+              <FolderOpen size={17} className="mt-0.5 shrink-0 text-shoko-accent" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium text-gray-100">{item.Name}</div>
                 <p className="mt-0.5 text-xs text-gray-500">
@@ -1816,14 +1816,14 @@ function IntegrityPanel({
             )}
           </div>
           <label className="mt-4 flex cursor-pointer select-none items-center gap-2 text-sm text-gray-400">
-            <input type="checkbox" checked={checkHash} onChange={event => setCheckHash(event.target.checked)} className="rounded border-gray-600 bg-gray-900 accent-blue-500" />
+            <input type="checkbox" checked={checkHash} onChange={event => setCheckHash(event.target.checked)} className="rounded border-gray-600 bg-gray-900 accent-shoko-accent" />
             Verify hashes
           </label>
           <button
             type="button"
             disabled={running || selectedFolderIDs.length === 0}
             onClick={onRunScan}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-md bg-shoko-accent px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
           >
             <Play size={14} />
             {running ? 'Starting...' : 'Create and Start'}
@@ -1918,7 +1918,7 @@ function IntegrityScanRow({
 }) {
   const progress = scan.TotalFiles > 0 ? Math.round(((scan.TotalFiles - scan.WaitingFiles) / scan.TotalFiles) * 100) : 0;
   return (
-    <div className={`px-4 py-3 ${active ? 'bg-blue-600/10' : ''}`}>
+    <div className={`px-4 py-3 ${active ? 'bg-shoko-accent/10' : ''}`}>
       <button type="button" onClick={onSelect} className="w-full text-left">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1928,7 +1928,7 @@ function IntegrityScanRow({
           <ScanStatusBadge status={scan.Status} />
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-800">
-          <div className="h-full rounded-full bg-blue-500" style={{ width: `${progress}%` }} />
+          <div className="h-full rounded-full bg-shoko-accent" style={{ width: `${progress}%` }} />
         </div>
         <p className="mt-2 text-xs text-gray-500">
           {scan.CompletedFiles} complete - {scan.ErrorFiles} errors - {scan.WaitingFiles} waiting
@@ -2096,7 +2096,7 @@ function RelocationPanel({
               type="button"
               disabled={applying || previewing || !previewResults || previewResults.length === 0}
               onClick={onApply}
-              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-400 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md bg-shoko-accent px-3 py-2 text-sm font-medium text-black transition-colors hover:bg-shoko-accent/85 disabled:opacity-50"
             >
               <Play size={14} />
               {applying ? 'Applying...' : 'Apply'}
@@ -2296,7 +2296,7 @@ function RelocationStatusBadge({ result }: { result: RelocationResult }) {
   let className = 'bg-red-600/20 text-red-400';
   if (result.IsSuccess && result.IsRelocated) {
     label = result.IsPreview ? 'Will Change' : 'Changed';
-    className = 'bg-blue-600/20 text-blue-300';
+    className = 'bg-shoko-accent/15 text-shoko-accent';
   } else if (result.IsSuccess) {
     label = 'No Change';
     className = 'bg-gray-700/50 text-gray-400';
@@ -2381,7 +2381,7 @@ function StatusBadge({ status }: { status: string }) {
 function ScanStatusBadge({ status }: { status: string }) {
   const className =
     status === 'Running'
-      ? 'bg-blue-600/20 text-blue-300'
+      ? 'bg-shoko-accent/15 text-shoko-accent'
       : status === 'Finished'
         ? 'bg-green-600/20 text-green-400'
         : 'bg-gray-700/50 text-gray-400';
@@ -2444,7 +2444,7 @@ function EmptyState({ title, detail }: { title: string; detail: string }) {
 function SpinnerBlock() {
   return (
     <div className="flex items-center justify-center py-12">
-      <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
     </div>
   );
 }

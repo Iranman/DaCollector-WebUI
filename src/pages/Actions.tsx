@@ -385,7 +385,7 @@ function ActionGroupPanel({
                       ? 'border-red-500/70 bg-red-600 text-white hover:bg-red-500'
                       : action.scope === 'admin'
                         ? 'border-yellow-600/70 bg-yellow-900/50 text-yellow-100 hover:border-yellow-500'
-                        : 'border-blue-500/80 bg-blue-600 text-white hover:bg-blue-500'
+                        : 'border-shoko-accent/80 bg-shoko-accent text-black hover:bg-shoko-accent/85'
                   }`}
                 >
                   {running[action.id] ? (
