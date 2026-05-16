@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Film, ListChecks, RefreshCw, Tv, X } from 'lucide-react';
-import { mediaApi, MediaMovieDto, MediaShowDto } from '../api/media';
+import { mediaApi, MediaMovieDto, MediaProvider, MediaShowDto } from '../api/media';
 import { ApiError } from '../api/client';
 import { ProviderMatchCandidate, providerMatchApi } from '../api/providerMatch';
+import MediaDetailPanel, { PanelItem } from '../components/MediaDetailPanel';
 
 type Tab = 'movies' | 'shows' | 'matches';
 type Provider = 'all' | 'tmdb' | 'tvdb';
@@ -14,6 +15,7 @@ export default function Media() {
   const navigate = useNavigate();
   const [tab, setTab] = useState<Tab>('movies');
   const [provider, setProvider] = useState<Provider>('tmdb');
+  const [panelItem, setPanelItem] = useState<PanelItem | null>(null);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
 
@@ -182,7 +184,19 @@ export default function Media() {
           movies.length === 0 ? (
             <div className="px-5 py-10 text-center text-sm text-gray-500">No movies found.</div>
           ) : (
-            movies.map(m => <MovieRow key={`${m.Provider}-${m.ProviderID}`} movie={m} onOpen={() => navigate(`/media/movies/${m.Provider}/${m.ProviderID}`)} />)
+            movies.map(m => (
+            <MovieRow
+              key={`${m.Provider}-${m.ProviderID}`}
+              movie={m}
+              onOpen={() =>
+                setPanelItem({
+                  kind: 'movies',
+                  provider: m.Provider as MediaProvider,
+                  providerID: m.ProviderID,
+                })
+              }
+            />
+          ))
           )
         ) : tab === 'matches' ? (
           candidates.length === 0 ? (
@@ -201,7 +215,19 @@ export default function Media() {
         ) : shows.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-gray-500">No shows found.</div>
         ) : (
-          shows.map(s => <ShowRow key={`${s.Provider}-${s.ProviderID}`} show={s} onOpen={() => navigate(`/media/shows/${s.Provider}/${s.ProviderID}`)} />)
+          shows.map(s => (
+            <ShowRow
+              key={`${s.Provider}-${s.ProviderID}`}
+              show={s}
+              onOpen={() =>
+                setPanelItem({
+                  kind: 'shows',
+                  provider: s.Provider as MediaProvider,
+                  providerID: s.ProviderID,
+                })
+              }
+            />
+          ))
         )}
       </div>
 
@@ -226,6 +252,11 @@ export default function Media() {
             Next →
           </button>
         </div>
+      )}
+
+      {/* Media detail slide-out panel */}
+      {panelItem && (
+        <MediaDetailPanel item={panelItem} onClose={() => setPanelItem(null)} />
       )}
     </div>
   );
