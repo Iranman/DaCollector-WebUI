@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, Layers3, RefreshCw, Tags, Wifi, WifiOff, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FolderSearch, RefreshCw, Settings2, Tags, Wifi, WifiOff, XCircle } from 'lucide-react';
 import { ServerStatus } from '../api/init';
 import { ApiError } from '../api/client';
 import { QueueStatus } from '../api/queue';
@@ -19,6 +19,7 @@ import {
   PlexTargetConnectionStatus,
   ServerCapabilityStatus,
 } from '../api/dacollectorStatus';
+import { fileReviewApi, MediaFileReviewItem } from '../api/fileReview';
 import { useLiveState } from '../lib/liveState';
 
 interface WarningItem {
@@ -40,11 +41,11 @@ type DashboardPanelId =
   | 'capabilities';
 
 const dashboardPanelLabels: Record<DashboardPanelId, string> = {
-  summary: 'Summary cards',
-  activity: 'Recent activity',
+  summary: 'Collection totals',
+  activity: 'Recently imported',
   'watch-state': 'Watch state',
   warnings: 'Readiness warnings',
-  'queue-plex': 'Queue and Plex target',
+  'queue-plex': 'Queue and unrecognized files',
   providers: 'Providers and collections',
   'collection-health': 'Collection health',
   composition: 'Composition and tags',
@@ -52,11 +53,11 @@ const dashboardPanelLabels: Record<DashboardPanelId, string> = {
 };
 
 const defaultDashboardPanelOrder: DashboardPanelId[] = [
-  'summary',
-  'activity',
-  'watch-state',
-  'warnings',
   'queue-plex',
+  'warnings',
+  'activity',
+  'summary',
+  'watch-state',
   'providers',
   'collection-health',
   'composition',
@@ -64,6 +65,12 @@ const defaultDashboardPanelOrder: DashboardPanelId[] = [
 ];
 
 const dashboardPrefsKey = 'dacollector_dashboard_panels';
+const dashboardPrefsVersion = 3;
+const defaultVisibleDashboardPanels = new Set<DashboardPanelId>(['queue-plex', 'activity']);
+const legacyDefaultDashboardPanelOrders: DashboardPanelId[][] = [
+  ['summary', 'activity', 'watch-state', 'warnings', 'queue-plex', 'providers', 'collection-health', 'composition', 'capabilities'],
+  ['summary', 'warnings', 'queue-plex', 'activity', 'watch-state', 'providers', 'collection-health', 'composition', 'capabilities'],
+];
 
 function fmtBytes(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -90,9 +97,12 @@ export default function Dashboard() {
   const [recentSeries, setRecentSeries] = useState<DashboardSeries[]>([]);
   const [continueWatching, setContinueWatching] = useState<DashboardEpisode[]>([]);
   const [nextUp, setNextUp] = useState<DashboardEpisode[]>([]);
+  const [unmatchedFiles, setUnmatchedFiles] = useState<MediaFileReviewItem[]>([]);
+  const [unmatchedTotal, setUnmatchedTotal] = useState(0);
   const [managedFolderCount, setManagedFolderCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [extrasError, setExtrasError] = useState<string | null>(null);
+  const [recentlyImportedTab, setRecentlyImportedTab] = useState<'episodes' | 'series'>('episodes');
   const [panelSettingsOpen, setPanelSettingsOpen] = useState(false);
   const [panelOrder, setPanelOrder] = useState<DashboardPanelId[]>(() => loadDashboardPrefs().order);
   const [panelVisibility, setPanelVisibility] = useState<Record<DashboardPanelId, boolean>>(() => loadDashboardPrefs().visibility);
@@ -103,10 +113,16 @@ export default function Dashboard() {
     async function load() {
       if (status?.State !== 'Started') return;
 
+      const shouldLoadActivity = panelVisibility.activity !== false;
+      const shouldLoadWatchState = panelVisibility['watch-state'] !== false;
+      const shouldLoadComposition = panelVisibility.composition !== false;
+      const shouldLoadReview = panelVisibility['queue-plex'] !== false;
+
       try {
         const [
           statsResult,
           foldersResult,
+          unmatchedResult,
           seriesSummaryResult,
           topTagsResult,
           recentEpisodesResult,
@@ -116,12 +132,13 @@ export default function Dashboard() {
         ] = await Promise.allSettled([
           dashboardApi.stats(),
           managedFoldersApi.list(),
-          dashboardApi.seriesSummary(),
-          dashboardApi.topTags(12),
-          dashboardApi.recentlyAddedEpisodes(8),
-          dashboardApi.recentlyAddedSeries(8),
-          dashboardApi.continueWatchingEpisodes(8),
-          dashboardApi.nextUpEpisodes(8),
+          shouldLoadReview ? fileReviewApi.getUnmatched(1, 4, false) : Promise.resolve({ Total: 0, List: [] as MediaFileReviewItem[] }),
+          shouldLoadComposition ? dashboardApi.seriesSummary() : Promise.resolve(null),
+          shouldLoadComposition ? dashboardApi.topTags(12) : Promise.resolve([]),
+          shouldLoadActivity ? dashboardApi.recentlyAddedEpisodes(12) : Promise.resolve({ Total: 0, List: [] as DashboardEpisode[] }),
+          shouldLoadActivity ? dashboardApi.recentlyAddedSeries(12) : Promise.resolve({ Total: 0, List: [] as DashboardSeries[] }),
+          shouldLoadWatchState ? dashboardApi.continueWatchingEpisodes(8) : Promise.resolve({ Total: 0, List: [] as DashboardEpisode[] }),
+          shouldLoadWatchState ? dashboardApi.nextUpEpisodes(8) : Promise.resolve({ Total: 0, List: [] as DashboardEpisode[] }),
         ]);
         if (stopped) return;
 
@@ -131,6 +148,7 @@ export default function Dashboard() {
         if (hasUnauthorized([
           statsResult,
           foldersResult,
+          unmatchedResult,
           seriesSummaryResult,
           topTagsResult,
           recentEpisodesResult,
@@ -152,14 +170,20 @@ export default function Dashboard() {
           setManagedFolderCount(foldersResult.value.length);
         }
 
+        if (unmatchedResult.status === 'fulfilled') {
+          setUnmatchedTotal(unmatchedResult.value.Total);
+          setUnmatchedFiles(unmatchedResult.value.List);
+        }
+
         const extraFailure = [
-          seriesSummaryResult,
-          topTagsResult,
-          recentEpisodesResult,
-          recentSeriesResult,
-          continueWatchingResult,
-          nextUpResult,
-        ].find(result => result.status === 'rejected');
+          shouldLoadReview ? unmatchedResult : null,
+          shouldLoadComposition ? seriesSummaryResult : null,
+          shouldLoadComposition ? topTagsResult : null,
+          shouldLoadActivity ? recentEpisodesResult : null,
+          shouldLoadActivity ? recentSeriesResult : null,
+          shouldLoadWatchState ? continueWatchingResult : null,
+          shouldLoadWatchState ? nextUpResult : null,
+        ].find(result => result?.status === 'rejected');
         if (extraFailure?.status === 'rejected') {
           setExtrasError(toErrorMessage(extraFailure.reason, 'Some dashboard panels could not be loaded.'));
         }
@@ -183,7 +207,7 @@ export default function Dashboard() {
     load();
 
     return () => { stopped = true; };
-  }, [navigate, status?.State]);
+  }, [navigate, panelVisibility, status?.State]);
 
   const warnings = useMemo(
     () => buildWarnings(readiness, managedFolderCount, status),
@@ -191,7 +215,11 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    localStorage.setItem(dashboardPrefsKey, JSON.stringify({ order: panelOrder, visibility: panelVisibility }));
+    localStorage.setItem(dashboardPrefsKey, JSON.stringify({
+      version: dashboardPrefsVersion,
+      order: panelOrder,
+      visibility: panelVisibility,
+    }));
   }, [panelOrder, panelVisibility]);
 
   function movePanel(panelId: DashboardPanelId, direction: -1 | 1) {
@@ -227,10 +255,13 @@ export default function Dashboard() {
 
     if (panelId === 'activity') {
       return (
-        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <SeriesListPanel title="Recently Added Series" series={recentSeries} emptyText="No recently added series." />
-          <EpisodeListPanel title="Recently Added Episodes" episodes={recentEpisodes} emptyText="No recently added episodes." />
-        </div>
+        <RecentlyImportedPanel
+          key={panelId}
+          activeTab={recentlyImportedTab}
+          episodes={recentEpisodes}
+          series={recentSeries}
+          onTabChange={setRecentlyImportedTab}
+        />
       );
     }
 
@@ -249,21 +280,18 @@ export default function Dashboard() {
 
     if (panelId === 'queue-plex') {
       return (
-        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <QueueWidget queue={queue} connState={queueConnection} />
-          {readiness ? (
-            <PlexPanel plex={readiness.PlexTarget} />
-          ) : (
-            <SkeletonPanel title="Plex Target" message="Waiting for readiness data…" />
-          )}
+          <UnrecognizedFilesPanel files={unmatchedFiles} total={unmatchedTotal} />
         </div>
       );
     }
 
     if (panelId === 'providers') {
       return readiness ? (
-        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-3">
           <ProviderPanel providers={readiness.Providers} />
+          <PlexPanel plex={readiness.PlexTarget} />
           <CollectionManagerPanel status={readiness.CollectionManager} />
         </div>
       ) : null;
@@ -326,17 +354,32 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="mx-auto w-full space-y-6 py-8" style={{ maxWidth: 'min(80rem, calc(100vw - 5rem))' }}>
-      <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-white">Dashboard</h1>
-          <p className="mt-0.5 max-w-xs text-xs text-gray-500 sm:max-w-none">Server readiness, queue activity, provider status, and collection health.</p>
+    <div className="w-full space-y-4 px-3 py-4 sm:px-5 lg:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-800/70 pb-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
+          <h1 className="text-sm font-semibold text-gray-200">Dashboard</h1>
+          <span className="text-gray-700">|</span>
+          <span className="truncate">Server {status?.State ?? 'Unknown'}</span>
+          {versions?.Server.Version && <span className="truncate">Server {versions.Server.Version}</span>}
+          {versions?.WebUI?.Version && <span className="truncate">WebUI {versions.WebUI.Version}</span>}
         </div>
-        <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-          {versions?.Server.Version && <span>Server {versions.Server.Version}</span>}
-          {versions?.WebUI?.Version && <span>WebUI {versions.WebUI.Version}</span>}
-          <button type="button" onClick={() => setPanelSettingsOpen(true)} className="text-blue-400 hover:text-blue-300">Panels</button>
-          <button type="button" onClick={() => void refresh()} className="text-blue-400 hover:text-blue-300">Refresh</button>
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => setPanelSettingsOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-700/70 bg-gray-900/50 px-3 py-1.5 text-gray-300 transition-colors hover:border-blue-500/70 hover:text-white"
+          >
+            <Settings2 size={13} />
+            Dashboard Settings
+          </button>
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-700/70 bg-gray-900/50 px-3 py-1.5 text-gray-300 transition-colors hover:border-blue-500/70 hover:text-white"
+          >
+            <RefreshCw size={13} />
+            Refresh
+          </button>
         </div>
       </div>
 
@@ -477,34 +520,6 @@ function WarningPanel({ warnings }: { warnings: WarningItem[] }) {
   );
 }
 
-function SeriesListPanel({ emptyText, series, title }: { emptyText: string; series: DashboardSeries[]; title: string }) {
-  return (
-    <div className="app-card rounded-md">
-      <PanelHeader icon={<Layers3 size={15} className="text-blue-400" />} title={title} count={series.length} />
-      {series.length === 0 ? (
-        <EmptyPanel text={emptyText} />
-      ) : (
-        <ul className="divide-y divide-gray-800/50">
-          {series.map((item, index) => (
-            <li key={`${seriesID(item) ?? index}-${seriesTitle(item)}`} className="px-5 py-3">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-gray-100">{seriesTitle(item)}</p>
-                  {item.Description && <p className="mt-1 line-clamp-2 text-xs text-gray-500">{item.Description}</p>}
-                </div>
-                <div className="shrink-0 text-right text-xs text-gray-500">
-                  {item.EpisodeCount != null && <p>{item.EpisodeCount} episode{item.EpisodeCount === 1 ? '' : 's'}</p>}
-                  {item.Size != null && <p>{item.Size} item{item.Size === 1 ? '' : 's'}</p>}
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function EpisodeListPanel({ emptyText, episodes, title }: { emptyText: string; episodes: DashboardEpisode[]; title: string }) {
   return (
     <div className="app-card rounded-md">
@@ -531,6 +546,97 @@ function EpisodeListPanel({ emptyText, episodes, title }: { emptyText: string; e
         </ul>
       )}
     </div>
+  );
+}
+
+function RecentlyImportedPanel({
+  activeTab,
+  episodes,
+  onTabChange,
+  series,
+}: {
+  activeTab: 'episodes' | 'series';
+  episodes: DashboardEpisode[];
+  onTabChange: (tab: 'episodes' | 'series') => void;
+  series: DashboardSeries[];
+}) {
+  const count = activeTab === 'episodes' ? episodes.length : series.length;
+
+  return (
+    <section className="app-card overflow-hidden rounded-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+        <h2 className="text-sm font-semibold text-gray-200">Recently Imported</h2>
+        <div className="inline-flex overflow-hidden rounded-md border border-gray-800 bg-gray-950/30 p-0.5">
+          <button
+            type="button"
+            onClick={() => onTabChange('episodes')}
+            className={`min-w-24 px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeTab === 'episodes' ? 'rounded bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Episodes
+          </button>
+          <button
+            type="button"
+            onClick={() => onTabChange('series')}
+            className={`min-w-24 px-3 py-1.5 text-xs font-medium transition-colors ${
+              activeTab === 'series' ? 'rounded bg-gray-800 text-gray-100' : 'text-gray-500 hover:text-gray-300'
+            }`}
+          >
+            Series
+          </button>
+        </div>
+      </div>
+
+      {count === 0 ? (
+        <EmptyPanel text="No recently imported media reported." />
+      ) : (
+        <div className="overflow-x-auto px-4 pb-5 sm:px-5">
+          <div className="flex min-w-max gap-4">
+            {activeTab === 'episodes'
+              ? episodes.map((episode, index) => <RecentEpisodeCard key={`${episode.IDs.DaCollectorEpisode ?? episode.IDs.ID}-${index}`} episode={episode} />)
+              : series.map((item, index) => <RecentSeriesCard key={`${seriesID(item) ?? index}-${seriesTitle(item)}`} series={item} />)}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RecentEpisodeCard({ episode }: { episode: DashboardEpisode }) {
+  const thumbnail = imageUrl(episode.Thumbnail) ?? imageUrl(episode.SeriesPoster);
+
+  return (
+    <Link to={episode.IDs.DaCollectorFile != null ? `/files?search=${episode.IDs.DaCollectorFile}` : '/media'} className="group block w-32 shrink-0">
+      {thumbnail ? (
+        <img
+          src={thumbnail}
+          alt=""
+          className="aspect-[2/3] w-full rounded-md border border-gray-800/80 object-cover shadow-lg transition group-hover:border-blue-500/60"
+          loading="lazy"
+        />
+      ) : (
+        <div className="grid aspect-[2/3] w-full place-items-center rounded-md border border-gray-800/80 bg-gray-950/50 text-xl font-semibold text-gray-700">
+          {episode.Number}
+        </div>
+      )}
+      <p className="mt-2 line-clamp-2 min-h-10 text-xs font-medium text-gray-200">{episode.Title || `Episode ${episode.Number}`}</p>
+      <p className="mt-0.5 truncate text-[11px] text-gray-500">{episode.SeriesTitle}</p>
+    </Link>
+  );
+}
+
+function RecentSeriesCard({ series }: { series: DashboardSeries }) {
+  return (
+    <Link to="/media" className="group block w-32 shrink-0">
+      <div className="flex aspect-[2/3] w-full items-end rounded-md border border-gray-800/80 bg-gradient-to-b from-gray-800/80 to-gray-950/90 p-3 shadow-lg transition group-hover:border-blue-500/60">
+        <span className="line-clamp-3 text-sm font-semibold text-gray-200">{seriesTitle(series)}</span>
+      </div>
+      <p className="mt-2 line-clamp-2 min-h-10 text-xs font-medium text-gray-200">{seriesTitle(series)}</p>
+      <p className="mt-0.5 truncate text-[11px] text-gray-500">
+        {[series.EpisodeCount != null ? `${series.EpisodeCount} episodes` : undefined, series.Size != null ? `${series.Size} files` : undefined].filter(Boolean).join(' · ') || 'Series'}
+      </p>
+    </Link>
   );
 }
 
@@ -705,17 +811,6 @@ function CapabilitiesPanel({ capabilities }: { capabilities: ServerCapabilitySta
   );
 }
 
-function SkeletonPanel({ title, message }: { title: string; message: string }) {
-  return (
-    <div className="app-card rounded-md">
-      <div className="border-b border-gray-700/50 px-5 py-3">
-        <h2 className="text-sm font-semibold text-gray-200">{title}</h2>
-      </div>
-      <div className="px-5 py-8 text-center text-sm text-gray-600">{message}</div>
-    </div>
-  );
-}
-
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
     <div>
@@ -746,19 +841,26 @@ function StatusPill({ state, label }: { state: 'ready' | 'warning' | 'off'; labe
 
 function QueueWidget({ queue, connState }: { queue: QueueStatus | null; connState: 'connecting' | 'live' | 'offline' }) {
   const idle = queue && queue.TotalCount === 0 && !queue.CurrentlyExecuting.length;
+  const runningItems = queue?.CurrentlyExecuting ?? [];
 
   return (
-    <div className="app-card rounded-md">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-700/50 px-5 py-3">
-        <div className="flex items-center gap-3">
-          <h2 className="text-sm font-semibold text-gray-200">Queue</h2>
+    <section className="app-card overflow-hidden rounded-md">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
+          <h2 className="font-semibold text-gray-200">Queue Processor</h2>
           {queue != null && (
-            <StatusPill state={queue.Running ? 'ready' : 'warning'} label={queue.Running ? 'Running' : 'Paused'} />
+            <>
+              <span className="text-gray-600">|</span>
+              <span className="font-semibold text-emerald-400">{queue.ThreadCount} Worker{queue.ThreadCount === 1 ? '' : 's'}</span>
+              <span className="text-gray-600">|</span>
+              <span className="font-semibold text-emerald-400">{queue.TotalCount} Task{queue.TotalCount === 1 ? '' : 's'}</span>
+            </>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 text-xs">
+          {queue != null && <StatusPill state={queue.Running ? 'ready' : 'warning'} label={queue.Running ? 'Running' : 'Paused'} />}
           {queue != null && (
-            <span className="text-xs text-gray-500">
+            <span className="hidden text-gray-500 sm:inline">
               {queue.WaitingCount} waiting · {queue.BlockedCount} blocked · {queue.TotalCount} total
             </span>
           )}
@@ -775,31 +877,85 @@ function QueueWidget({ queue, connState }: { queue: QueueStatus | null; connStat
       </div>
 
       {queue == null ? (
-        <div className="px-5 py-5 text-center text-sm text-gray-600">Waiting for queue data…</div>
+        <div className="px-5 py-12 text-center text-sm text-gray-600">Waiting for queue data…</div>
       ) : idle ? (
-        <div className="px-5 py-5 text-center text-sm text-gray-500">Queue is idle.</div>
+        <div className="px-5 py-12 text-center text-sm text-gray-500">Queue is idle.</div>
       ) : (
-        <ul className="divide-y divide-gray-800/50 max-h-48 overflow-y-auto">
-          {queue.CurrentlyExecuting.map(item => (
-            <li key={item.Key} className="flex items-center justify-between gap-4 px-5 py-2.5">
-              <div className="min-w-0">
-                <p className="truncate text-sm text-gray-200">{item.Title}</p>
-                {formatQueueDetails(item.Details) && (
-                  <p className="truncate text-xs text-gray-500">{formatQueueDetails(item.Details)}</p>
-                )}
+        <ul className="max-h-64 divide-y divide-gray-800/50 overflow-y-auto px-3 pb-3 sm:px-4">
+          {runningItems.map(item => (
+            <li key={item.Key} className="rounded-md px-3 py-2.5 transition-colors odd:bg-gray-950/30">
+              <div className="flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-gray-200">{item.Title || item.Type}</p>
+                  {formatQueueDetails(item.Details) && (
+                    <p className="truncate text-xs text-gray-500">{formatQueueDetails(item.Details)}</p>
+                  )}
+                </div>
+                <span className="shrink-0 text-xs text-gray-500">{item.Type}</span>
               </div>
-              <span className="shrink-0 text-xs text-gray-500">{item.Type}</span>
             </li>
           ))}
           {queue.WaitingCount > 0 && (
-            <li className="px-5 py-2 text-xs text-gray-600">
+            <li className="px-3 py-2 text-xs text-gray-600">
               +{queue.WaitingCount} job{queue.WaitingCount !== 1 ? 's' : ''} waiting
             </li>
           )}
         </ul>
       )}
-    </div>
+    </section>
   );
+}
+
+function UnrecognizedFilesPanel({ files, total }: { files: MediaFileReviewItem[]; total: number }) {
+  return (
+    <section className="app-card overflow-hidden rounded-md">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+        <h2 className="text-sm font-semibold text-gray-200">Unrecognized Files</h2>
+        <Link to="/utilities/unrecognized/files" className="text-xs font-semibold text-emerald-400 hover:text-emerald-300">
+          {total} File{total === 1 ? '' : 's'}
+        </Link>
+      </div>
+
+      {files.length === 0 ? (
+        <div className="px-5 py-12 text-center text-sm text-gray-500">No unrecognized files.</div>
+      ) : (
+        <ul className="max-h-64 divide-y divide-gray-800/50 overflow-y-auto px-3 pb-3 sm:px-4">
+          {files.map(file => (
+            <li key={file.FileID}>
+              <Link to="/utilities/unrecognized/files" className="flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors odd:bg-gray-950/30 hover:bg-white/5">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-gray-500">{formatDateTime(file.Review.UpdatedAt ?? file.Review.LastParsedAt ?? file.Review.CreatedAt)}</p>
+                  <p className="truncate text-sm text-gray-200">{fileDisplayName(file)}</p>
+                  <p className="truncate text-xs text-gray-600">{file.PrimaryPath}</p>
+                </div>
+                <FolderSearch size={16} className="shrink-0 text-blue-400" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {total > files.length && (
+        <div className="border-t border-gray-800/50 px-5 py-3 text-right">
+          <Link to="/utilities/unrecognized/files" className="text-xs font-medium text-blue-400 hover:text-blue-300">
+            Review all
+          </Link>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function fileDisplayName(file: MediaFileReviewItem) {
+  const primary = file.Locations.find(location => location.FileName)?.FileName;
+  return primary || file.PrimaryPath.split(/[\\/]/).pop() || `File ${file.FileID}`;
+}
+
+function formatDateTime(value?: string) {
+  if (!value) return 'Unknown time';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
 }
 
 function EpisodeArtwork({ episode }: { episode: DashboardEpisode }) {
@@ -872,7 +1028,7 @@ function formatQueueValue(value: unknown) {
 
 function defaultDashboardPanelVisibility(): Record<DashboardPanelId, boolean> {
   return defaultDashboardPanelOrder.reduce((acc, panelId) => {
-    acc[panelId] = true;
+    acc[panelId] = defaultVisibleDashboardPanels.has(panelId);
     return acc;
   }, {} as Record<DashboardPanelId, boolean>);
 }
@@ -887,6 +1043,7 @@ function loadDashboardPrefs() {
     const raw = localStorage.getItem(dashboardPrefsKey);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<{
+      version: number;
       order: DashboardPanelId[];
       visibility: Partial<Record<DashboardPanelId, boolean>>;
     }>;
@@ -895,6 +1052,11 @@ function loadDashboardPrefs() {
       ...parsedOrder,
       ...defaultDashboardPanelOrder.filter(panelId => !parsedOrder.includes(panelId)),
     ];
+
+    if (shouldResetLegacyDashboardPrefs(parsed, parsedOrder)) {
+      return fallback;
+    }
+
     return {
       order,
       visibility: {
@@ -905,6 +1067,26 @@ function loadDashboardPrefs() {
   } catch {
     return fallback;
   }
+}
+
+function shouldResetLegacyDashboardPrefs(
+  parsed: Partial<{
+    version: number;
+    order: DashboardPanelId[];
+    visibility: Partial<Record<DashboardPanelId, boolean>>;
+  }>,
+  parsedOrder: DashboardPanelId[]
+) {
+  if (parsed.version === dashboardPrefsVersion) return false;
+
+  const hasDefaultOrder = parsedOrder.length === 0 ||
+    [defaultDashboardPanelOrder, ...legacyDefaultDashboardPanelOrders].some(order =>
+      parsedOrder.length === order.length && parsedOrder.every((panelId, index) => panelId === order[index])
+    );
+  const visibility = parsed.visibility ?? {};
+  const allPanelsVisible = defaultDashboardPanelOrder.every(panelId => visibility[panelId] !== false);
+
+  return hasDefaultOrder && allPanelsVisible;
 }
 
 function DashboardPanelSettings({

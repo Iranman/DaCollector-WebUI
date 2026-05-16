@@ -1196,10 +1196,48 @@ Verification evidence:
 - `POST /api/v3/Init/ResetSetup` was not invoked during smoke validation because it intentionally requests a server restart into setup mode.
 - Chrome rendered the Settings > General setup reset action and Settings > Import folder quick-add panel, then captured desktop/mobile screenshots in `docs/verification/p37/`.
 
+## P38 — Shoko-Style Dashboard Default Surface — DONE
+
+Goal:
+- Rework the default Dashboard toward the Shoko server dashboard reference: a compact operations-first surface with queue processor, unrecognized files, and recently imported media visible by default.
+
+Audit findings:
+- P23/P33 made every dashboard panel visible by default and persisted that all-on layout to `localStorage`.
+- The page had enough useful API-backed information, but the default visual density was too high for first-load and normal daily use.
+- A user with the old untouched all-on default needed a migration path because the previous default may already be saved locally.
+- The target reference uses two dense top panels and a horizontal media shelf instead of a wall of summary/provider/health cards.
+
+Tasks:
+- Change the default visible dashboard panels to Queue/Unrecognized Files and Recently Imported.
+- Redesign the queue panel as a compact "Queue Processor | Workers | Tasks" surface.
+- Add an Unrecognized Files panel backed by the media file review API.
+- Replace the old recent activity lists with a horizontal recently imported shelf and Episodes/Series segmented control.
+- Keep readiness warnings, summary, watch-state, provider/Plex, collection-health, composition, and capability panels available but hidden by default.
+- Add a dashboard panel preference version and migrate untouched legacy all-on layouts to the new Shoko-style default.
+- Preserve explicit user-customized panel visibility/order.
+- Keep all dashboard data server/API-backed; do not add fake stats or browser-side backend behavior.
+
+Acceptance criteria:
+- `npm run build` passes.
+- New/default dashboard renders the Shoko-style queue/unrecognized/recently-imported first screen.
+- Old all-on default `localStorage` preferences migrate to the Shoko-style default.
+- Explicit custom dashboard preferences remain respected.
+- Existing Panels modal can re-enable hidden advanced panels.
+
+Verification evidence:
+- `npm run build` passed with the existing Vite/PostCSS/Rollup warnings.
+- `git diff --check -- src\pages\Dashboard.tsx CLAUDE_TASKS.md` passed with only CRLF conversion notices.
+- Browser screenshot smoke served the rebuilt `dist` bundle through a local static/API proxy and verified:
+  - Default desktop Dashboard shows Queue Processor, Unrecognized Files, and Recently Imported.
+  - Default mobile Dashboard stacks the same simplified panels.
+  - Legacy all-on dashboard preferences migrate to version 3 with only Queue/Unrecognized Files and Recently Imported visible.
+  - Dashboard Settings still exposes hidden advanced panels.
+- Evidence saved in `docs/verification/p38/`.
+
 ## Claude Coordination Notes
 
 Next implementation order:
-1. Pick P38 from remaining unsurfaced API/routes.
+1. Pick P39 from remaining unsurfaced API/routes.
 
 Important:
 - Do not start by changing backend code.
