@@ -301,7 +301,7 @@ export default function Actions() {
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Actions</h1>
+          <h1 className="text-xl font-semibold text-gray-100">Actions</h1>
           <p className="mt-1 text-sm text-gray-500">Queue server maintenance jobs against files already managed by DaCollector.</p>
         </div>
         <div className="inline-flex items-center gap-2 rounded-md border border-gray-700/50 bg-gray-900/40 px-3 py-2 text-xs text-gray-400">

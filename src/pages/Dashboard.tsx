@@ -180,7 +180,7 @@ function StatCard({ label, value, accent }: { label: string; value: string; acce
   return (
     <div className="app-card rounded-md px-5 py-4">
       <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
-      <p className={`mt-1 truncate text-2xl font-semibold ${accent ? 'text-yellow-400' : 'text-white'}`}>{value}</p>
+      <p className={`mt-1 truncate text-2xl font-semibold ${accent ? 'text-yellow-400' : 'text-gray-100'}`}>{value}</p>
     </div>
   );
 }

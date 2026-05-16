@@ -107,7 +107,7 @@ export default function Media() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
       <div className="flex flex-wrap items-center gap-3 justify-between">
-        <h1 className="text-xl font-semibold text-white">Library</h1>
+        <h1 className="text-xl font-semibold text-gray-100">Library</h1>
         <button
           onClick={load}
           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors"
@@ -268,7 +268,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
       onClick={onClick}
       className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
         active
-          ? 'border-shoko-accent text-white'
+          ? 'border-shoko-accent text-gray-100'
           : 'border-transparent text-gray-400 hover:text-gray-200'
       }`}
     >

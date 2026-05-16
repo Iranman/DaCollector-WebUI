@@ -29,7 +29,7 @@ export default function Parser() {
 
   return (
     <div className="mx-auto max-w-3xl px-6 py-8 space-y-6">
-      <h1 className="text-xl font-semibold text-white">Filename Parser</h1>
+      <h1 className="text-xl font-semibold text-gray-100">Filename Parser</h1>
 
       <form onSubmit={handleParse} className="app-card rounded-md p-5 space-y-4">
         <p className="text-sm text-gray-400">

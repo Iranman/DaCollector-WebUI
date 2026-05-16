@@ -256,8 +256,8 @@ export default function Settings() {
     <div className="overflow-x-hidden py-6 sm:py-8">
       <div className="mx-auto w-full min-w-0" style={{ maxWidth: 'min(64rem, calc(100vw - 5rem))' }}>
         <form onSubmit={handleSave} className="app-surface flex w-full max-w-full flex-col overflow-hidden rounded-none md:min-h-[42rem] md:flex-row">
-          <aside className="w-full shrink-0 border-b border-gray-700/50 bg-[#0d0d1a]/70 py-5 md:w-52 md:border-b-0 md:border-r">
-            <h1 className="px-4 pb-5 text-xl font-semibold text-white sm:px-6">Settings</h1>
+          <aside className="w-full shrink-0 border-b border-gray-700/50 bg-shoko-surface/70 py-5 md:w-52 md:border-b-0 md:border-r">
+            <h1 className="px-4 pb-5 text-xl font-semibold text-gray-100 sm:px-6">Settings</h1>
             <nav className="grid grid-cols-2 gap-1 sm:grid-cols-4 md:block md:space-y-1">
               {sections.map(item => (
                 <button
@@ -266,7 +266,7 @@ export default function Settings() {
                   onClick={() => void navigateSection(item.id)}
                   className={`block w-full border-l-2 px-4 py-2.5 text-left text-sm transition-colors sm:px-6 ${
                     activeSection === item.id
-                      ? 'border-shoko-accent bg-shoko-accent/15 text-white'
+                      ? 'border-shoko-accent bg-shoko-accent/15 text-gray-100'
                       : 'border-transparent text-gray-400 hover:text-gray-200'
                   }`}
                 >
@@ -276,7 +276,7 @@ export default function Settings() {
             </nav>
           </aside>
 
-          <section className="flex min-w-0 flex-1 flex-col bg-[#0d0d1a]/55 p-4 sm:p-8">
+          <section className="flex min-w-0 flex-1 flex-col bg-shoko-surface/55 p-4 sm:p-8">
             {error && <Alert tone="error">{error}</Alert>}
             {saved && <Alert tone="success">Settings saved.</Alert>}
             {dirty && (

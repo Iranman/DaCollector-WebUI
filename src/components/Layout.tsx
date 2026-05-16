@@ -6,10 +6,12 @@ import {
   Camera,
   CheckCircle2,
   DownloadCloud,
+  Moon,
   Settings,
   LogOut,
   LayoutDashboard,
   Library,
+  Sun,
   Wrench,
   Zap,
   Film,
@@ -21,6 +23,7 @@ import {
 import { clearApiKey } from '../api/client';
 import { usersApi } from '../api/users';
 import { useLiveState } from '../lib/liveState';
+import { getTheme, toggleTheme, type Theme } from '../lib/theme';
 import { useToast } from './ui/ToastProvider';
 import BrandMark from './BrandMark';
 
@@ -48,6 +51,11 @@ export default function Layout() {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [avatarSaving, setAvatarSaving] = useState(false);
+  const [theme, setThemeState] = useState<Theme>(getTheme);
+
+  function handleToggleTheme() {
+    setThemeState(toggleTheme());
+  }
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -120,11 +128,11 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen overflow-x-hidden text-gray-100">
-      <header className="fixed inset-x-0 top-0 z-40 border-b border-shoko-line bg-[#050505]/92 backdrop-blur-sm">
+      <header className="fixed inset-x-0 top-0 z-40 border-b border-shoko-line bg-shoko-header/92 backdrop-blur-sm">
         <div className="flex h-16 items-center px-3 sm:px-6">
           <NavLink to="/dashboard" onClick={closeMobile} className="flex min-w-0 items-center gap-3 pr-3 sm:pr-6 xl:pr-10">
             <BrandMark className="h-11 w-11" />
-            <span className="hidden truncate text-2xl font-semibold tracking-wide text-white sm:block">DaCollector</span>
+            <span className="hidden truncate text-2xl font-semibold tracking-wide text-gray-100 sm:block">DaCollector</span>
           </NavLink>
 
           <nav className="hidden items-center gap-2 lg:flex">
@@ -167,6 +175,15 @@ export default function Layout() {
               <Settings size={19} />
             </NavLink>
 
+            <button
+              type="button"
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              onClick={handleToggleTheme}
+              className="inline-flex rounded-md p-2 text-gray-400 transition-colors hover:bg-white/5 hover:text-gray-200"
+            >
+              {theme === 'dark' ? <Sun size={19} /> : <Moon size={19} />}
+            </button>
+
             <div ref={notificationRef} className="relative">
               <button
                 type="button"
@@ -205,7 +222,7 @@ export default function Layout() {
         </div>
 
         {mobileOpen && (
-          <nav className="border-t border-shoko-line bg-[#050505]/95 px-4 py-4 shadow-panel lg:hidden">
+          <nav className="border-t border-shoko-line bg-shoko-header/95 px-4 py-4 shadow-panel lg:hidden">
             <div className="space-y-2">
               {mainNav.map(item => (
                 <MobileLink key={item.to} item={item} currentPath={location.pathname} onNavigate={closeMobile} />
@@ -242,11 +259,11 @@ function AccountMenu({
   username: string;
 }) {
   return (
-    <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-md border border-shoko-line bg-[#0d0d0d] p-4 shadow-panel">
+    <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-md border border-shoko-line bg-shoko-panel p-4 shadow-panel">
       <div className="flex items-center gap-3">
         <UserAvatar username={username} avatar={avatar} sizeClass="h-14 w-14" />
         <div className="min-w-0">
-          <p className="truncate text-base font-semibold text-white">{username}</p>
+          <p className="truncate text-base font-semibold text-gray-100">{username}</p>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-gray-500">
             {isAdmin ? <CheckCircle2 size={13} className="text-shoko-accent" /> : <UserCircle size={13} />}
             {isAdmin ? 'Administrator' : 'User'}
@@ -309,9 +326,9 @@ function NotificationMenu({
   const hasNotifications = warnings.length > 0 || queueCount > 0 || updateLabels.length > 0;
 
   return (
-    <div className="absolute right-0 top-full z-50 mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-md border border-shoko-line bg-[#0d0d0d] shadow-panel">
+    <div className="absolute right-0 top-full z-50 mt-2 w-96 max-w-[calc(100vw-2rem)] rounded-md border border-shoko-line bg-shoko-panel shadow-panel">
       <div className="flex items-center justify-between border-b border-gray-800/60 px-4 py-3">
-        <p className="text-sm font-semibold text-white">Notifications</p>
+        <p className="text-sm font-semibold text-gray-100">Notifications</p>
         <span className="text-xs text-gray-500">{queueCount} queued</span>
       </div>
 

@@ -302,7 +302,7 @@ export default function MediaDetail() {
         <div className="app-card px-4 py-3 text-sm text-red-400">{error}</div>
       ) : detail ? (
         <>
-          <section className="overflow-hidden rounded-md border border-gray-700/50 bg-[#0d0d1a]/85 shadow-panel">
+          <section className="overflow-hidden rounded-md border border-gray-700/50 bg-shoko-surface/85 shadow-panel">
             <div
               className="relative min-h-80 bg-cover bg-center"
               style={backdrop ? { backgroundImage: `linear-gradient(90deg, rgba(13,13,26,0.96), rgba(13,13,26,0.78)), url(${backdrop})` } : undefined}
@@ -326,7 +326,7 @@ export default function MediaDetail() {
                       </span>
                       {detail.Year && <span className="text-xs text-gray-400">{detail.Year}</span>}
                     </div>
-                    <h1 className="text-3xl font-semibold text-white">{title}</h1>
+                    <h1 className="text-3xl font-semibold text-gray-100">{title}</h1>
                     {originalTitle && originalTitle !== title && (
                       <p className="mt-1 text-sm text-gray-400">{originalTitle}</p>
                     )}
@@ -565,7 +565,7 @@ function OrderingPanel({
             onClick={() => onSetPreferred(item.IsDefault ? 'default' : item.OrderingID)}
             className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors disabled:cursor-not-allowed ${
               item.IsPreferred
-                ? 'border-shoko-accent/60 bg-shoko-accent/15 text-white'
+                ? 'border-shoko-accent/60 bg-shoko-accent/15 text-gray-100'
                 : 'border-gray-800 bg-gray-950/35 text-gray-300 hover:border-gray-700 hover:bg-gray-900/80'
             }`}
           >

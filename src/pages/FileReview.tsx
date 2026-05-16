@@ -742,7 +742,7 @@ export default function FileReview() {
     <div className="mx-auto max-w-6xl px-6 py-8 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-white">File Review</h1>
+          <h1 className="text-xl font-semibold text-gray-100">File Review</h1>
           <p className="mt-0.5 text-xs text-gray-500">Review unmatched files, duplicates, missing episodes, integrity scans, and relocation previews.</p>
         </div>
         <button
@@ -949,7 +949,7 @@ function TabButton({
       onClick={onClick}
       className={`-mb-px flex items-center gap-1.5 border-b-2 px-4 py-2 text-sm font-medium transition-colors ${
         active
-          ? 'border-shoko-accent text-white'
+          ? 'border-shoko-accent text-gray-100'
           : 'border-transparent text-gray-400 hover:text-gray-200'
       }`}
     >
@@ -974,7 +974,7 @@ function SegmentButton({
       onClick={onClick}
       className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-colors ${
         active
-          ? 'border-shoko-accent/70 bg-shoko-accent/15 text-white'
+          ? 'border-shoko-accent/70 bg-shoko-accent/15 text-gray-100'
           : 'border-gray-700 bg-gray-900/50 text-gray-400 hover:text-gray-200'
       }`}
     >
@@ -2322,7 +2322,7 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
   return (
     <div className="rounded-md border border-gray-800 bg-gray-950/30 p-3">
       <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-white">{value}</div>
+      <div className="mt-1 text-lg font-semibold text-gray-100">{value}</div>
     </div>
   );
 }

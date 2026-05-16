@@ -248,7 +248,7 @@ export default function Log() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Log</h1>
+          <h1 className="text-xl font-semibold text-gray-100">Log</h1>
           <p className="mt-1 text-sm text-gray-500">Filtered server logs with file-level admin controls.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -361,7 +361,7 @@ export default function Log() {
             <div ref={scrollRef} className="max-h-[70vh] overflow-y-auto">
               <div className="hidden min-w-[900px] overflow-x-auto md:block">
                 <table className="w-full text-xs">
-                  <thead className="sticky top-0 bg-[#0d0d1a]">
+                  <thead className="sticky top-0 bg-shoko-surface">
                     <tr className="border-b border-gray-800/50">
                       <th className="px-4 py-2 text-left font-normal text-gray-500">Time</th>
                       <th className="px-3 py-2 text-left font-normal text-gray-500">Level</th>

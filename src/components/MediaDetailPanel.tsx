@@ -137,7 +137,7 @@ export default function MediaDetailPanel({
       {/* Panel */}
       <div
         ref={panelRef}
-        className="flex w-full max-w-[620px] flex-col overflow-hidden border-l border-gray-800 bg-[#0d0d0d] shadow-2xl"
+        className="flex w-full max-w-[620px] flex-col overflow-hidden border-l border-gray-800 bg-shoko-panel shadow-2xl"
       >
         {/* Header */}
         <div
@@ -171,7 +171,7 @@ export default function MediaDetailPanel({
               {loading && !detail ? (
                 <div className="h-4 w-36 animate-pulse rounded bg-gray-800" />
               ) : (
-                <h2 className="text-base font-semibold leading-snug text-white">
+                <h2 className="text-base font-semibold leading-snug text-gray-100">
                   {detail?.Title ?? '—'}
                   {detail?.Year ? (
                     <span className="ml-2 text-sm font-normal text-gray-400">{detail.Year}</span>
@@ -200,14 +200,14 @@ export default function MediaDetailPanel({
         </div>
 
         {/* Tab bar */}
-        <div className="flex shrink-0 border-b border-gray-800 bg-[#0d0d0d]">
+        <div className="flex shrink-0 border-b border-gray-800 bg-shoko-panel">
           {tabs.map(t => (
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`-mb-px border-b-2 px-4 py-2.5 text-xs font-medium uppercase tracking-wide transition-colors ${
                 tab === t.id
-                  ? 'border-shoko-accent text-white'
+                  ? 'border-shoko-accent text-gray-100'
                   : 'border-transparent text-gray-500 hover:text-gray-300'
               }`}
             >

@@ -2,6 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Theme variables ──────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: dark;
+
+  /* Gray scale — same as Tailwind defaults */
+  --gray-50:  249 250 251;
+  --gray-100: 243 244 246;
+  --gray-200: 229 231 235;
+  --gray-300: 209 213 219;
+  --gray-400: 156 163 175;
+  --gray-500: 107 114 128;
+  --gray-600:  75  85  99;
+  --gray-700:  55  65  81;
+  --gray-800:  31  41  55;
+  --gray-900:  17  24  39;
+  --gray-950:   3   7  18;
+
+  /* Structural backgrounds */
+  --shoko-bg:      5   5   5;   /* #050505 */
+  --shoko-header:  5   5   5;   /* #050505 */
+  --shoko-panel:  10  10  10;   /* #0a0a0a */
+  --shoko-surface: 13  13  26;  /* #0d0d1a */
+  --shoko-input:   17  24  39;  /* #111827  = gray-900 */
+
+  /* Border with built-in alpha */
+  --shoko-line: rgba(212, 175, 55, 0.24);
+
+  /* Body gradient stops */
+  --body-from:   #050505;
+  --body-mid:    #0b0a08;
+  --body-to:     #11100c;
+  --body-glow-1: rgba(212, 175, 55, 0.14);
+  --body-glow-2: rgba(120,  88, 20, 0.16);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* Gray scale — inverted to warm tones so dark/light roles flip naturally:
+     gray-100 becomes near-black (text), gray-900 becomes near-white (surfaces). */
+  --gray-50:   28  22   8;   /* near-black warm  */
+  --gray-100:  35  30  12;   /* dark text         */
+  --gray-200:  62  56  30;
+  --gray-300:  95  88  55;
+  --gray-400: 130 122  85;
+  --gray-500: 152 144 110;   /* mid warm gray     */
+  --gray-600: 175 168 142;
+  --gray-700: 205 200 180;   /* subtle border     */
+  --gray-800: 228 224 210;   /* light surface     */
+  --gray-900: 241 238 228;   /* near-white surface */
+  --gray-950: 248 246 239;   /* off-white         */
+
+  /* Structural backgrounds */
+  --shoko-bg:      249 246 237;   /* #f9f6ed warm cream  */
+  --shoko-header:  255 255 255;   /* #ffffff              */
+  --shoko-panel:   255 253 247;   /* #fffdf7 warm white   */
+  --shoko-surface: 247 244 235;   /* #f7f4eb warm off-white */
+  --shoko-input:   255 255 255;   /* #ffffff              */
+
+  /* Slightly more opaque border line in light mode */
+  --shoko-line: rgba(212, 175, 55, 0.35);
+
+  /* Body gradient stops */
+  --body-from:   #f9f6ed;
+  --body-mid:    #f5f0e0;
+  --body-to:     #f0ead0;
+  --body-glow-1: rgba(212, 175, 55, 0.08);
+  --body-glow-2: rgba(180, 140,  30, 0.06);
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────────────── */
+
 @layer base {
   html,
   body,
@@ -12,11 +85,12 @@
   body {
     margin: 0;
     background:
-      radial-gradient(circle at 18% 18%, rgba(212, 175, 55, 0.14), transparent 28rem),
-      radial-gradient(circle at 82% 24%, rgba(120, 88, 20, 0.16), transparent 24rem),
-      linear-gradient(135deg, #050505 0%, #0b0a08 48%, #11100c 100%);
-    color: #f3f4f6;
+      radial-gradient(circle at 18% 18%, var(--body-glow-1), transparent 28rem),
+      radial-gradient(circle at 82% 24%, var(--body-glow-2), transparent 24rem),
+      linear-gradient(135deg, var(--body-from) 0%, var(--body-mid) 48%, var(--body-to) 100%);
+    color: rgb(var(--gray-100));
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    transition: background 0.25s ease, color 0.25s ease;
   }
 
   button,
@@ -26,6 +100,8 @@
     font: inherit;
   }
 }
+
+/* ─── Components ────────────────────────────────────────────────────────────── */
 
 @layer components {
   .app-surface {
@@ -41,7 +117,7 @@
   }
 
   .admin-secondary-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-gray-600 bg-black/60 px-3 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-shoko-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-gray-600 bg-shoko-panel/60 px-3 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-shoko-accent hover:text-gray-100 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .admin-warning-button {

@@ -355,7 +355,7 @@ export default function Collections() {
     <div className="mx-auto max-w-6xl space-y-6 px-6 py-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-white">Collections</h1>
+          <h1 className="text-xl font-semibold text-gray-100">Collections</h1>
           <p className="mt-0.5 text-xs text-gray-500">Manage provider-built collections and Plex sync previews.</p>
         </div>
         <div className="flex gap-2">
@@ -510,7 +510,7 @@ function CollectionModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4">
       <div className="app-surface max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-md p-6">
         <div className="mb-6 flex items-center justify-between gap-4">
-          <h2 className="text-xl font-semibold text-white">{draft.id ? 'Edit Collection' : 'Add Collection'}</h2>
+          <h2 className="text-xl font-semibold text-gray-100">{draft.id ? 'Edit Collection' : 'Add Collection'}</h2>
           <Button size="sm" variant="ghost" onClick={onClose}>Close</Button>
         </div>
 
@@ -546,7 +546,7 @@ function CollectionModal({
 
             <div className="rounded-md border border-gray-800 bg-gray-950/30 p-3">
               <div className="text-xs uppercase tracking-wide text-gray-500">Rules</div>
-              <div className="mt-1 text-lg font-semibold text-white">{draft.rules.length}</div>
+              <div className="mt-1 text-lg font-semibold text-gray-100">{draft.rules.length}</div>
             </div>
           </div>
 
@@ -902,7 +902,7 @@ function SummaryCard({ label, value }: { label: string; value: string | number }
   return (
     <div className="rounded-md border border-gray-800 bg-gray-950/30 p-3">
       <div className="text-xs uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-white">{value}</div>
+      <div className="mt-1 text-lg font-semibold text-gray-100">{value}</div>
     </div>
   );
 }

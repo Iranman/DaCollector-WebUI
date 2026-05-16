@@ -227,7 +227,7 @@ export default function Utilities() {
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-white">Utilities</h1>
+          <h1 className="text-xl font-semibold text-gray-100">Utilities</h1>
           <p className="mt-1 text-sm text-gray-500">Queue operations and server task visibility.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

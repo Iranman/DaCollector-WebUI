@@ -89,7 +89,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: num
     <div className={`pointer-events-auto app-card flex items-start gap-3 rounded-md px-4 py-3 shadow-panel ${toneClasses}`}>
       <Icon size={18} className="mt-0.5 shrink-0" />
       <div className="min-w-0 flex-1">
-        {toast.title && <p className="text-sm font-semibold text-white">{toast.title}</p>}
+        {toast.title && <p className="text-sm font-semibold text-gray-100">{toast.title}</p>}
         <p className="text-sm text-gray-300">{toast.message}</p>
       </div>
       <button
