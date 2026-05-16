@@ -27,15 +27,13 @@ type SectionId =
   | 'profile'
   | 'web-ui'
   | 'import'
-  | 'tvdb'
-  | 'metadata-sites'
+  | 'metadata'
   | 'collection'
   | 'integrations'
-  | 'user-management'
+  | 'users'
   | 'api-keys'
-  | 'hashing'
+  | 'advanced'
   | 'release-info'
-  | 'relocation'
   | 'database';
 
 type SettingValue = string | number | boolean | string[] | undefined;
@@ -45,19 +43,17 @@ const sections: Array<{ id: SectionId; label: string }> = [
   { id: 'profile', label: 'Profile' },
   { id: 'web-ui', label: 'Web UI' },
   { id: 'import', label: 'Import' },
-  { id: 'tvdb', label: 'TVDB' },
-  { id: 'metadata-sites', label: 'Metadata Sites' },
+  { id: 'metadata', label: 'Metadata' },
   { id: 'collection', label: 'Collection' },
   { id: 'integrations', label: 'Integrations' },
-  { id: 'user-management', label: 'User Management' },
+  { id: 'users', label: 'Users' },
   { id: 'api-keys', label: 'API Keys' },
-  { id: 'hashing', label: 'Hashing' },
+  { id: 'advanced', label: 'Advanced' },
   { id: 'release-info', label: 'Release Info' },
-  { id: 'relocation', label: 'Relocation' },
   { id: 'database', label: 'Database' },
 ];
 
-const standaloneSections: SectionId[] = ['profile', 'web-ui', 'user-management', 'api-keys', 'hashing', 'release-info', 'relocation', 'database'];
+const standaloneSections: SectionId[] = ['profile', 'web-ui', 'users', 'api-keys', 'advanced', 'release-info', 'database'];
 
 const relationTypes = [
   'Dissimilar Titles',
@@ -300,11 +296,8 @@ export default function Settings() {
               {activeSection === 'import' && (
                 <ImportSection settings={settings} updateSetting={updateSetting} />
               )}
-              {activeSection === 'tvdb' && (
-                <TVDBSection settings={settings} updateSetting={updateSetting} />
-              )}
-              {activeSection === 'metadata-sites' && (
-                <MetadataSitesSection settings={settings} updateSetting={updateSetting} />
+              {activeSection === 'metadata' && (
+                <MetadataSection settings={settings} updateSetting={updateSetting} />
               )}
               {activeSection === 'collection' && (
                 <CollectionSection settings={settings} updateSetting={updateSetting} toggleRelation={toggleRelation} />
@@ -312,7 +305,7 @@ export default function Settings() {
               {activeSection === 'integrations' && (
                 <IntegrationsSection settings={settings} updateSetting={updateSetting} />
               )}
-              {activeSection === 'user-management' && (
+              {activeSection === 'users' && (
                 <UserManagementSection />
               )}
               {activeSection === 'api-keys' && (
@@ -327,22 +320,15 @@ export default function Settings() {
                   onDelete={handleDeleteToken}
                 />
               )}
-              {activeSection === 'hashing' && (
+              {activeSection === 'advanced' && (
                 <ConfigurationSummarySection
-                  title="Hashing"
-                  description="Review hashing-related server configuration exposed by the generic configuration API."
-                  queries={['hash', 'avdump', 'file']}
+                  title="Advanced"
+                  description="Review server configuration for hashing, file operations, and relocation exposed by the configuration API."
+                  queries={['hash', 'avdump', 'file', 'relocation', 'rename', 'move']}
                 />
               )}
               {activeSection === 'release-info' && (
                 <ReleaseInfoSection />
-              )}
-              {activeSection === 'relocation' && (
-                <ConfigurationSummarySection
-                  title="Relocation"
-                  description="Review rename, relocation, and file move configuration without adding browser-side file operations."
-                  queries={['relocation', 'rename', 'move']}
-                />
               )}
               {activeSection === 'database' && (
                 <DatabaseSection />
@@ -569,7 +555,7 @@ function ProviderTestButton({
   );
 }
 
-function TVDBSection({
+function MetadataSection({
   settings,
   updateSetting,
 }: {
@@ -578,8 +564,40 @@ function TVDBSection({
 }) {
   return (
     <div className="space-y-7">
-      <SectionHeader title="TVDB" description="Configure TVDB lookup for movie and TV collection builders." />
-      <SettingGroup title="Provider Options">
+      <SectionHeader title="Metadata" description="Configure the metadata providers that DaCollector uses to download information and images for your collection." />
+
+      <SettingGroup title="TMDB">
+        <SettingsRow label="API Key">
+          <TextInput type="password" value={settings.TMDB?.UserApiKey ?? ''} onChange={e => updateSetting(['TMDB', 'UserApiKey'], e.target.value)} placeholder="Required — get your key at themoviedb.org" />
+        </SettingsRow>
+        <SettingsRow label="Test Connection">
+          <ProviderTestButton
+            label="Test TMDB"
+            onTest={async () => {
+              const key = settings.TMDB?.UserApiKey ?? '';
+              if (!key.trim()) throw new Error('Enter an API key first.');
+              const result = await initApi.testTmdbKey(key);
+              if (!result.Success) throw new Error(result.Error ?? 'Connection failed');
+            }}
+          />
+        </SettingsRow>
+        <ToggleRow label="Auto Link" checked={toBool(settings.TMDB?.AutoLink, true)} onChange={v => updateSetting(['TMDB', 'AutoLink'], v)} />
+        <ToggleRow label="Auto Link Restricted" checked={toBool(settings.TMDB?.AutoLinkRestricted, true)} onChange={v => updateSetting(['TMDB', 'AutoLinkRestricted'], v)} />
+      </SettingGroup>
+
+      <SettingGroup title="TMDB Downloads">
+        <ToggleRow label="Crew and Cast" checked={toBool(settings.TMDB?.AutoDownloadCrewAndCast)} onChange={v => updateSetting(['TMDB', 'AutoDownloadCrewAndCast'], v)} />
+        <ToggleRow label="Movie Collections" checked={toBool(settings.TMDB?.AutoDownloadCollections)} onChange={v => updateSetting(['TMDB', 'AutoDownloadCollections'], v)} />
+        <ToggleRow label="Alternate Ordering" checked={toBool(settings.TMDB?.AutoDownloadAlternateOrdering)} onChange={v => updateSetting(['TMDB', 'AutoDownloadAlternateOrdering'], v)} />
+        <DownloadLimitRow label="Backdrops" togglePath="AutoDownloadBackdrops" maxPath="MaxAutoBackdrops" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Posters" togglePath="AutoDownloadPosters" maxPath="MaxAutoPosters" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Logos" togglePath="AutoDownloadLogos" maxPath="MaxAutoLogos" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Episode Thumbnails" togglePath="AutoDownloadThumbnails" maxPath="MaxAutoThumbnails" defaultMax={1} settings={settings} updateSetting={updateSetting} />
+        <DownloadLimitRow label="Staff Images" togglePath="AutoDownloadStaffImages" maxPath="MaxAutoStaffImages" defaultMax={10} settings={settings} updateSetting={updateSetting} />
+        <ToggleRow label="Studio Images" checked={toBool(settings.TMDB?.AutoDownloadStudioImages, true)} onChange={v => updateSetting(['TMDB', 'AutoDownloadStudioImages'], v)} />
+      </SettingGroup>
+
+      <SettingGroup title="TVDB">
         <ToggleRow label="Enabled" checked={toBool(settings.TVDB?.Enabled)} onChange={v => updateSetting(['TVDB', 'Enabled'], v)} />
         <SettingsRow label="API Key">
           <TextInput type="password" value={settings.TVDB?.ApiKey ?? ''} onChange={e => updateSetting(['TVDB', 'ApiKey'], e.target.value)} />
@@ -601,50 +619,6 @@ function TVDBSection({
             }}
           />
         </SettingsRow>
-      </SettingGroup>
-      <p className="text-sm text-gray-500">TVDB requires an API key before TVDB collection builders can fetch provider data.</p>
-    </div>
-  );
-}
-
-function MetadataSitesSection({
-  settings,
-  updateSetting,
-}: {
-  settings: ServerSettings;
-  updateSetting: (path: string[], value: SettingValue) => void;
-}) {
-  return (
-    <div className="space-y-7">
-      <SectionHeader title="Metadata Sites" description="Customize the information and images that DaCollector downloads for movies and TV series in your collection." />
-      <SettingGroup title="TMDB Options">
-        <SettingsRow label="API Key">
-          <TextInput type="password" value={settings.TMDB?.UserApiKey ?? ''} onChange={e => updateSetting(['TMDB', 'UserApiKey'], e.target.value)} placeholder="Required — get your key at themoviedb.org" />
-        </SettingsRow>
-        <SettingsRow label="Test Connection">
-          <ProviderTestButton
-            label="Test TMDB"
-            onTest={async () => {
-              const key = settings.TMDB?.UserApiKey ?? '';
-              if (!key.trim()) throw new Error('Enter an API key first.');
-              const result = await initApi.testTmdbKey(key);
-              if (!result.Success) throw new Error(result.Error ?? 'Connection failed');
-            }}
-          />
-        </SettingsRow>
-        <ToggleRow label="Auto Link" checked={toBool(settings.TMDB?.AutoLink, true)} onChange={v => updateSetting(['TMDB', 'AutoLink'], v)} />
-        <ToggleRow label="Auto Link Restricted" checked={toBool(settings.TMDB?.AutoLinkRestricted, true)} onChange={v => updateSetting(['TMDB', 'AutoLinkRestricted'], v)} />
-      </SettingGroup>
-      <SettingGroup title="TMDB Download Options">
-        <ToggleRow label="Download Crew And Cast" checked={toBool(settings.TMDB?.AutoDownloadCrewAndCast)} onChange={v => updateSetting(['TMDB', 'AutoDownloadCrewAndCast'], v)} />
-        <ToggleRow label="Download Movie Collections" checked={toBool(settings.TMDB?.AutoDownloadCollections)} onChange={v => updateSetting(['TMDB', 'AutoDownloadCollections'], v)} />
-        <ToggleRow label="Download Alternate Ordering" checked={toBool(settings.TMDB?.AutoDownloadAlternateOrdering)} onChange={v => updateSetting(['TMDB', 'AutoDownloadAlternateOrdering'], v)} />
-        <DownloadLimitRow label="Download Backdrops" togglePath="AutoDownloadBackdrops" maxPath="MaxAutoBackdrops" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Posters" togglePath="AutoDownloadPosters" maxPath="MaxAutoPosters" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Logos" togglePath="AutoDownloadLogos" maxPath="MaxAutoLogos" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Episode Thumbnails" togglePath="AutoDownloadThumbnails" maxPath="MaxAutoThumbnails" defaultMax={1} settings={settings} updateSetting={updateSetting} />
-        <DownloadLimitRow label="Download Staff Images" togglePath="AutoDownloadStaffImages" maxPath="MaxAutoStaffImages" defaultMax={10} settings={settings} updateSetting={updateSetting} />
-        <ToggleRow label="Download Studio Images" checked={toBool(settings.TMDB?.AutoDownloadStudioImages, true)} onChange={v => updateSetting(['TMDB', 'AutoDownloadStudioImages'], v)} />
       </SettingGroup>
     </div>
   );
@@ -2440,8 +2414,18 @@ function InlineSpinner() {
   );
 }
 
+const _legacySectionMap: Record<string, SectionId> = {
+  'tvdb': 'metadata',
+  'metadata-sites': 'metadata',
+  'user-management': 'users',
+  'hashing': 'advanced',
+  'relocation': 'advanced',
+};
+
 function normalizeSection(value?: string): SectionId {
-  return sections.some(section => section.id === value) ? value as SectionId : 'general';
+  if (!value) return 'general';
+  if (sections.some(section => section.id === value)) return value as SectionId;
+  return _legacySectionMap[value] ?? 'general';
 }
 
 function toBool(value: unknown, fallback = false): boolean {
