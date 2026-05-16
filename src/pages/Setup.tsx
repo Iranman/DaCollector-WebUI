@@ -79,7 +79,7 @@ export default function Setup({ onAuthenticated }: { onAuthenticated: () => void
         <div className="app-surface w-full max-w-lg rounded-md p-8 text-center">
           <BrandHeader subtitle="Starting DaCollector" />
           <SetupProgress current="startup" />
-          <div className="mx-auto mt-8 h-10 w-10 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
+          <div className="mx-auto mt-8 h-10 w-10 animate-spin rounded-full border-4 border-shoko-accent border-t-transparent" />
           <p className="mt-5 text-sm text-gray-300">{statusMsg}</p>
           <p className="mt-2 text-xs text-gray-500">
             Provider, managed-folder, Plex, and data-collection readiness continue on the Dashboard after authentication.
@@ -155,7 +155,7 @@ function SetupProgress({ current }: { current: 'account' | 'startup' }) {
             key={item.key}
             className={`rounded-md border px-3 py-2 text-xs ${
               active
-                ? 'border-blue-500/70 bg-blue-600/20 text-white'
+                ? 'border-shoko-accent/70 bg-shoko-accent/15 text-white'
                 : done
                   ? 'border-emerald-500/50 bg-emerald-600/10 text-emerald-300'
                   : 'border-gray-800 bg-black/20 text-gray-500'

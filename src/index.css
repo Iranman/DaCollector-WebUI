@@ -37,15 +37,15 @@
   }
 
   .app-focus {
-    @apply focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500;
+    @apply focus:outline-none focus:ring-1 focus:ring-shoko-accent focus:border-shoko-accent;
   }
 
   .admin-secondary-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-gray-600 bg-black/60 px-3 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-blue-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-gray-600 bg-black/60 px-3 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-shoko-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .admin-warning-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-md border border-blue-600/70 bg-blue-900/50 px-3 py-2 text-sm font-medium text-blue-100 transition-colors hover:border-blue-500 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-shoko-accent/70 bg-shoko-accent/15 px-3 py-2 text-sm font-medium text-shoko-accent transition-colors hover:border-shoko-accent disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .admin-danger-button {
