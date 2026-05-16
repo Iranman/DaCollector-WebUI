@@ -1,17 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FolderSearch, RefreshCw, Settings2, Tags, Wifi, WifiOff, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, FolderPlus, FolderSearch, RefreshCw, Settings2, Wifi, WifiOff, XCircle } from 'lucide-react';
 import { ServerStatus } from '../api/init';
 import { ApiError } from '../api/client';
 import { QueueStatus } from '../api/queue';
-import { managedFoldersApi } from '../api/managedFolders';
+import { managedFoldersApi, ManagedFolder } from '../api/managedFolders';
 import {
   CollectionStats,
   DashboardEpisode,
   dashboardApi,
   DashboardSeries,
   DashboardSeriesSummary,
-  DashboardTag,
 } from '../api/dashboard';
 import {
   DaCollectorStatus,
@@ -35,41 +34,45 @@ type DashboardPanelId =
   | 'watch-state'
   | 'warnings'
   | 'queue-plex'
+  | 'import-folders'
   | 'providers'
   | 'collection-health'
   | 'composition'
   | 'capabilities';
 
 const dashboardPanelLabels: Record<DashboardPanelId, string> = {
-  summary: 'Collection totals',
+  summary: 'Collection statistics',
   activity: 'Recently imported',
   'watch-state': 'Watch state',
   warnings: 'Readiness warnings',
   'queue-plex': 'Queue and unrecognized files',
+  'import-folders': 'Import folders',
   providers: 'Providers and collections',
   'collection-health': 'Collection health',
-  composition: 'Composition and tags',
+  composition: 'Media type',
   capabilities: 'Server capabilities',
 };
 
 const defaultDashboardPanelOrder: DashboardPanelId[] = [
   'queue-plex',
-  'warnings',
   'activity',
   'summary',
+  'composition',
+  'import-folders',
+  'warnings',
   'watch-state',
   'providers',
   'collection-health',
-  'composition',
   'capabilities',
 ];
 
 const dashboardPrefsKey = 'dacollector_dashboard_panels';
-const dashboardPrefsVersion = 3;
-const defaultVisibleDashboardPanels = new Set<DashboardPanelId>(['queue-plex', 'activity']);
+const dashboardPrefsVersion = 4;
+const defaultVisibleDashboardPanels = new Set<DashboardPanelId>(['queue-plex', 'activity', 'summary', 'composition', 'import-folders']);
 const legacyDefaultDashboardPanelOrders: DashboardPanelId[][] = [
   ['summary', 'activity', 'watch-state', 'warnings', 'queue-plex', 'providers', 'collection-health', 'composition', 'capabilities'],
   ['summary', 'warnings', 'queue-plex', 'activity', 'watch-state', 'providers', 'collection-health', 'composition', 'capabilities'],
+  ['queue-plex', 'warnings', 'activity', 'summary', 'watch-state', 'providers', 'collection-health', 'composition', 'capabilities'],
 ];
 
 function fmtBytes(bytes: number): string {
@@ -92,13 +95,13 @@ export default function Dashboard() {
   } = useLiveState();
   const [stats, setStats] = useState<CollectionStats | null>(null);
   const [seriesSummary, setSeriesSummary] = useState<DashboardSeriesSummary | null>(null);
-  const [topTags, setTopTags] = useState<DashboardTag[]>([]);
   const [recentEpisodes, setRecentEpisodes] = useState<DashboardEpisode[]>([]);
   const [recentSeries, setRecentSeries] = useState<DashboardSeries[]>([]);
   const [continueWatching, setContinueWatching] = useState<DashboardEpisode[]>([]);
   const [nextUp, setNextUp] = useState<DashboardEpisode[]>([]);
   const [unmatchedFiles, setUnmatchedFiles] = useState<MediaFileReviewItem[]>([]);
   const [unmatchedTotal, setUnmatchedTotal] = useState(0);
+  const [managedFolders, setManagedFolders] = useState<ManagedFolder[]>([]);
   const [managedFolderCount, setManagedFolderCount] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [extrasError, setExtrasError] = useState<string | null>(null);
@@ -124,7 +127,6 @@ export default function Dashboard() {
           foldersResult,
           unmatchedResult,
           seriesSummaryResult,
-          topTagsResult,
           recentEpisodesResult,
           recentSeriesResult,
           continueWatchingResult,
@@ -134,7 +136,6 @@ export default function Dashboard() {
           managedFoldersApi.list(),
           shouldLoadReview ? fileReviewApi.getUnmatched(1, 4, false) : Promise.resolve({ Total: 0, List: [] as MediaFileReviewItem[] }),
           shouldLoadComposition ? dashboardApi.seriesSummary() : Promise.resolve(null),
-          shouldLoadComposition ? dashboardApi.topTags(12) : Promise.resolve([]),
           shouldLoadActivity ? dashboardApi.recentlyAddedEpisodes(12) : Promise.resolve({ Total: 0, List: [] as DashboardEpisode[] }),
           shouldLoadActivity ? dashboardApi.recentlyAddedSeries(12) : Promise.resolve({ Total: 0, List: [] as DashboardSeries[] }),
           shouldLoadWatchState ? dashboardApi.continueWatchingEpisodes(8) : Promise.resolve({ Total: 0, List: [] as DashboardEpisode[] }),
@@ -150,7 +151,6 @@ export default function Dashboard() {
           foldersResult,
           unmatchedResult,
           seriesSummaryResult,
-          topTagsResult,
           recentEpisodesResult,
           recentSeriesResult,
           continueWatchingResult,
@@ -167,6 +167,7 @@ export default function Dashboard() {
         }
 
         if (foldersResult.status === 'fulfilled') {
+          setManagedFolders(foldersResult.value);
           setManagedFolderCount(foldersResult.value.length);
         }
 
@@ -178,7 +179,6 @@ export default function Dashboard() {
         const extraFailure = [
           shouldLoadReview ? unmatchedResult : null,
           shouldLoadComposition ? seriesSummaryResult : null,
-          shouldLoadComposition ? topTagsResult : null,
           shouldLoadActivity ? recentEpisodesResult : null,
           shouldLoadActivity ? recentSeriesResult : null,
           shouldLoadWatchState ? continueWatchingResult : null,
@@ -189,7 +189,6 @@ export default function Dashboard() {
         }
 
         if (seriesSummaryResult.status === 'fulfilled') setSeriesSummary(seriesSummaryResult.value);
-        if (topTagsResult.status === 'fulfilled') setTopTags(topTagsResult.value);
         if (recentEpisodesResult.status === 'fulfilled') setRecentEpisodes(recentEpisodesResult.value.List);
         if (recentSeriesResult.status === 'fulfilled') setRecentSeries(recentSeriesResult.value.List);
         if (continueWatchingResult.status === 'fulfilled') setContinueWatching(continueWatchingResult.value.List);
@@ -242,32 +241,25 @@ export default function Dashboard() {
     if (panelVisibility[panelId] === false) return null;
 
     if (panelId === 'summary') {
-      return (
-        <div key={panelId} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard label="Status" value={status?.State ?? '—'} />
-          <StatCard label="Uptime" value={status?.Uptime ?? '—'} />
-          <StatCard label="Folders" value={managedFolderCount == null ? '—' : String(managedFolderCount)} />
-          <StatCard label="Series" value={stats ? String(stats.SeriesCount) : '—'} />
-          <StatCard label="Files" value={stats ? String(stats.FileCount) : '—'} />
-        </div>
-      );
+      return <CollectionStatisticsPanel key={panelId} stats={stats} />;
     }
 
     if (panelId === 'activity') {
       return (
-        <RecentlyImportedPanel
-          key={panelId}
-          activeTab={recentlyImportedTab}
-          episodes={recentEpisodes}
-          series={recentSeries}
-          onTabChange={setRecentlyImportedTab}
-        />
+        <div key={panelId} className="xl:col-span-3">
+          <RecentlyImportedPanel
+            activeTab={recentlyImportedTab}
+            episodes={recentEpisodes}
+            series={recentSeries}
+            onTabChange={setRecentlyImportedTab}
+          />
+        </div>
       );
     }
 
     if (panelId === 'watch-state') {
       return (
-        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:col-span-3 xl:grid-cols-2">
           <EpisodeListPanel title="Continue Watching" episodes={continueWatching} emptyText="No active watch-state entries." />
           <EpisodeListPanel title="Next Up" episodes={nextUp} emptyText="No next-up episodes reported." />
         </div>
@@ -275,12 +267,16 @@ export default function Dashboard() {
     }
 
     if (panelId === 'warnings') {
-      return warnings.length > 0 ? <WarningPanel key={panelId} warnings={warnings} /> : null;
+      return warnings.length > 0 ? (
+        <div key={panelId} className="xl:col-span-3">
+          <WarningPanel warnings={warnings} />
+        </div>
+      ) : null;
     }
 
     if (panelId === 'queue-plex') {
       return (
-        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:col-span-3 xl:grid-cols-2">
           <QueueWidget queue={queue} connState={queueConnection} />
           <UnrecognizedFilesPanel files={unmatchedFiles} total={unmatchedTotal} />
         </div>
@@ -289,7 +285,7 @@ export default function Dashboard() {
 
     if (panelId === 'providers') {
       return readiness ? (
-        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        <div key={panelId} className="grid grid-cols-1 gap-4 xl:col-span-3 xl:grid-cols-3">
           <ProviderPanel providers={readiness.Providers} />
           <PlexPanel plex={readiness.PlexTarget} />
           <CollectionManagerPanel status={readiness.CollectionManager} />
@@ -297,9 +293,13 @@ export default function Dashboard() {
       ) : null;
     }
 
+    if (panelId === 'import-folders') {
+      return <ImportFoldersPanel key={panelId} folders={managedFolders} />;
+    }
+
     if (panelId === 'collection-health') {
       return stats ? (
-        <div key={panelId} className="space-y-4">
+        <div key={panelId} className="space-y-4 xl:col-span-3">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Groups" value={String(stats.GroupCount)} />
             <StatCard label="Watched" value={`${stats.WatchedHours}h`} />
@@ -338,16 +338,15 @@ export default function Dashboard() {
     }
 
     if (panelId === 'composition') {
-      return (
-        <div key={panelId} className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,0.8fr)]">
-          <SeriesSummaryPanel summary={seriesSummary} />
-          <TopTagsPanel tags={topTags} />
-        </div>
-      );
+      return <MediaTypePanel key={panelId} summary={seriesSummary} />;
     }
 
     if (panelId === 'capabilities') {
-      return readiness ? <CapabilitiesPanel key={panelId} capabilities={readiness.ServerCapabilities} /> : null;
+      return readiness ? (
+        <div key={panelId} className="xl:col-span-3">
+          <CapabilitiesPanel capabilities={readiness.ServerCapabilities} />
+        </div>
+      ) : null;
     }
 
     return null;
@@ -401,7 +400,9 @@ export default function Dashboard() {
         </div>
       )}
 
-      {panelOrder.map(panelId => renderDashboardPanel(panelId))}
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        {panelOrder.map(panelId => renderDashboardPanel(panelId))}
+      </div>
 
       {panelSettingsOpen && (
         <DashboardPanelSettings
@@ -640,52 +641,131 @@ function RecentSeriesCard({ series }: { series: DashboardSeries }) {
   );
 }
 
-function SeriesSummaryPanel({ summary }: { summary: DashboardSeriesSummary | null }) {
-  const rows = summary ? [
-    ['Series', summary.Series],
-    ['Movies', summary.Movie],
-    ['OVA', summary.OVA],
-    ['Specials', summary.Special],
-    ['Web', summary.Web],
-    ['Music Videos', summary.MusicVideo],
-    ['Other', summary.Other],
-    ['Unknown', summary.Unknown + summary.None],
+function CollectionStatisticsPanel({ stats }: { stats: CollectionStats | null }) {
+  const rows = stats ? [
+    ['Series', stats.SeriesCount],
+    ['Series Completed', stats.FinishedSeries],
+    ['Episodes Watched', stats.WatchedEpisodes],
+    ['Hours Watched', `${stats.WatchedHours} H`],
+    ['Collection Size', fmtBytes(stats.FileSize)],
+    ['Files', stats.FileCount],
+    ['Unknown Files', stats.UnrecognizedFiles, 'text-blue-400'],
+    ['Duplicate Episodes', stats.EpisodesWithMultipleFiles],
+    ['Duplicate Hashes', stats.FilesWithDuplicateLocations],
+    ['Missing TVDB/TMDB Links', stats.SeriesWithMissingLinks],
+    ['Missing Episodes (Collecting)', stats.MissingEpisodesCollecting],
+    ['Missing Episodes (Total)', stats.MissingEpisodes],
   ] as const : [];
 
   return (
-    <div className="app-card rounded-md">
-      <PanelHeader icon={<CalendarDays size={15} className="text-blue-400" />} title="Collection Composition" />
-      {summary == null ? (
-        <EmptyPanel text="Composition data is not available." />
+    <section className="app-card rounded-md p-6 sm:p-8">
+      <h2 className="text-xl font-semibold text-gray-200">Collection Statistics</h2>
+      {stats == null ? (
+        <EmptyPanel text="Collection statistics are not available." />
       ) : (
-        <div className="grid grid-cols-2 gap-4 p-5 sm:grid-cols-4">
-          {rows.map(([label, value]) => (
-            <MiniStat key={label} label={label} value={String(value)} />
+        <dl className="mt-7 space-y-1 text-lg">
+          {rows.map(([label, value, valueClass]) => (
+            <div key={label} className={`flex items-baseline justify-between gap-6 ${label === 'Collection Size' || label === 'Missing TVDB/TMDB Links' ? 'pt-4' : ''}`}>
+              <dt className="min-w-0 text-gray-300">{label}</dt>
+              <dd className={`shrink-0 text-right font-medium ${valueClass ?? 'text-gray-300'}`}>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+    </section>
+  );
+}
+
+function MediaTypePanel({ summary }: { summary: DashboardSeriesSummary | null }) {
+  const total = summary
+    ? summary.Series + summary.Movie + summary.Web + summary.OVA + summary.Special + summary.MusicVideo + summary.Other + summary.Unknown + summary.None
+    : 0;
+  const rows = summary ? [
+    { label: 'TV Series', value: summary.Series, color: 'bg-blue-400', text: 'text-blue-400' },
+    { label: 'Movie', value: summary.Movie, color: 'bg-emerald-500', text: 'text-emerald-400' },
+    { label: 'Web', value: summary.Web, color: 'bg-red-400', text: 'text-red-400' },
+    { label: 'Other', value: summary.Other + summary.Unknown + summary.None, color: 'bg-purple-400', text: 'text-purple-400' },
+    { label: 'OVA', value: summary.OVA, color: 'bg-yellow-400', text: 'text-yellow-300' },
+    { label: 'Special', value: summary.Special, color: 'bg-cyan-400', text: 'text-cyan-300' },
+    { label: 'Music Video', value: summary.MusicVideo, color: 'bg-pink-400', text: 'text-pink-300' },
+  ].filter(row => row.value > 0) : [];
+
+  return (
+    <section className="app-card rounded-md p-6 sm:p-8">
+      <h2 className="text-xl font-semibold text-gray-200">Media Type</h2>
+      {summary == null || total === 0 || rows.length === 0 ? (
+        <EmptyPanel text="No media type data reported." />
+      ) : (
+        <div className="mt-7 space-y-5">
+          {rows.map(row => {
+            const percent = total > 0 ? (row.value / total) * 100 : 0;
+            return (
+              <div key={row.label}>
+                <div className="mb-2 flex items-baseline justify-between gap-4 text-lg">
+                  <span className="text-gray-300">{row.label} - {row.value}</span>
+                  <span className={`text-base font-semibold ${row.text}`}>{percent.toFixed(2)}%</span>
+                </div>
+                <div className="h-4 overflow-hidden rounded-md bg-gray-950/70">
+                  <div className={`h-full rounded-md ${row.color}`} style={{ width: `${Math.max(3, percent)}%` }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ImportFoldersPanel({ folders }: { folders: ManagedFolder[] }) {
+  return (
+    <section className="app-card rounded-md p-6 sm:p-8">
+      <div className="flex items-center justify-between gap-4">
+        <h2 className="text-xl font-semibold text-gray-200">Import Folders</h2>
+        <Link to="/folders" title="Manage import folders" className="text-blue-400 hover:text-blue-300">
+          <FolderPlus size={23} />
+        </Link>
+      </div>
+
+      {folders.length === 0 ? (
+        <EmptyPanel text="No import folders configured." />
+      ) : (
+        <div className="mt-7 space-y-8">
+          {folders.map(folder => (
+            <div key={folder.ID} className="min-w-0">
+              <div className="mb-4 flex items-start justify-between gap-4">
+                <h3 className="min-w-0 truncate text-lg font-semibold text-gray-300">{folder.Name}</h3>
+                <div className="flex shrink-0 items-center gap-3">
+                  {folder.WatchForNewFiles && <FolderSearch size={19} className="text-blue-400" />}
+                </div>
+              </div>
+              <dl className="space-y-2 text-lg">
+                <ImportFolderRow label="Location" value={folder.Path} />
+                <ImportFolderRow label="Type" value={folder.WatchForNewFiles ? 'Watch' : formatDropFolderType(folder.DropFolderType)} />
+                <ImportFolderRow
+                  label="Size"
+                  value={`${fmtBytes(folder.FileSize)}${folder.Size > 0 ? ` (${folder.Size} item${folder.Size === 1 ? '' : 's'})` : ''}`}
+                />
+              </dl>
+            </div>
           ))}
         </div>
       )}
+    </section>
+  );
+}
+
+function ImportFolderRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-6">
+      <dt className="text-gray-300">{label}</dt>
+      <dd className="min-w-0 max-w-[70%] break-words text-right text-gray-300">{value || '-'}</dd>
     </div>
   );
 }
 
-function TopTagsPanel({ tags }: { tags: DashboardTag[] }) {
-  return (
-    <div className="app-card rounded-md">
-      <PanelHeader icon={<Tags size={15} className="text-blue-400" />} title="Top Tags" count={tags.length} />
-      {tags.length === 0 ? (
-        <EmptyPanel text="No top tags reported." />
-      ) : (
-        <div className="flex flex-wrap gap-2 p-5">
-          {tags.map(tag => (
-            <span key={`${tag.ID ?? tag.Name}-${tag.Weight ?? 0}`} className="rounded-md border border-gray-700/50 bg-gray-950/40 px-3 py-2 text-xs text-gray-300">
-              {tag.Name}
-              {tag.Weight != null && <span className="ml-1.5 text-gray-600">{tag.Weight}</span>}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+function formatDropFolderType(type: ManagedFolder['DropFolderType']) {
+  return type === 'None' ? 'Manual' : type;
 }
 
 function PanelHeader({ count, icon, title }: { count?: number; icon: React.ReactNode; title: string }) {

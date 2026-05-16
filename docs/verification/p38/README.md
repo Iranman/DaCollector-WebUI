@@ -4,7 +4,7 @@ Date: 2026-05-15
 
 Scope:
 - Reworked the default Dashboard toward the Shoko server dashboard reference.
-- Default visible panels are Queue/Unrecognized Files and Recently Imported.
+- Default visible panels are Queue/Unrecognized Files, Recently Imported, Collection Statistics, Media Type, and Import Folders.
 - Advanced panels remain available through Dashboard Settings.
 
 Verification:
@@ -18,4 +18,5 @@ Verification:
 
 Notes:
 - The screenshot container used an empty test data volume, so Recently Imported and Unrecognized Files render their empty states.
+- The same empty test data volume leaves Media Type and Import Folders in their empty states while still verifying layout and panel visibility.
 - The screenshot proxy served local rebuilt WebUI assets and forwarded API requests to the P38 Docker test container on `127.0.0.1:38118`.
