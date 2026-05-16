@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -82,7 +82,20 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
+  const warningRef = useRef<HTMLDivElement>(null);
+  const bellRef = useRef<HTMLDivElement>(null);
   const { currentUser, error, queue, readinessWarnings, status, updateState } = useLiveState();
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (warningRef.current && !warningRef.current.contains(e.target as Node)) setWarningOpen(false);
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   function handleLogout() {
     clearApiKey();
@@ -93,10 +106,16 @@ export default function Layout() {
     setMobileOpen(false);
   }
 
+  const runningJobs = queue?.CurrentlyExecuting ?? [];
   const queueCount = queue?.TotalCount ?? 0;
   const username = currentUser?.Username ?? 'User';
   const userInitial = username.trim().charAt(0).toUpperCase() || 'U';
-  const warningCount = readinessWarnings.length + (error ? 1 : 0) + (status?.State && status.State !== 'Started' ? 1 : 0);
+  const allWarnings = [
+    ...readinessWarnings,
+    ...(error ? [error] : []),
+    ...(status?.State && status.State !== 'Started' ? [`Server state: ${status.State}`] : []),
+  ];
+  const warningCount = allWarnings.length;
   const updateCount = Number(updateState.serverAvailable) + Number(updateState.webuiAvailable);
 
   return (
@@ -119,16 +138,34 @@ export default function Layout() {
 
           <div className="ml-auto flex shrink-0 items-center gap-2 sm:gap-4">
             {warningCount > 0 && (
-              <NavLink
-                to="/dashboard"
-                title={`${warningCount} readiness warning${warningCount === 1 ? '' : 's'}`}
-                className="relative hidden items-center text-yellow-400 transition-colors hover:text-yellow-300 sm:flex"
-              >
-                <AlertTriangle size={18} />
-                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-yellow-500 px-1 text-[10px] font-semibold leading-none text-black">
-                  {warningCount > 9 ? '9+' : warningCount}
-                </span>
-              </NavLink>
+              <div ref={warningRef} className="relative hidden sm:block">
+                <button
+                  type="button"
+                  title={`${warningCount} readiness warning${warningCount === 1 ? '' : 's'}`}
+                  onClick={() => { setWarningOpen(o => !o); setBellOpen(false); }}
+                  className="relative flex items-center text-yellow-400 transition-colors hover:text-yellow-300"
+                >
+                  <AlertTriangle size={18} />
+                  <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-yellow-500 px-1 text-[10px] font-semibold leading-none text-black">
+                    {warningCount > 9 ? '9+' : warningCount}
+                  </span>
+                </button>
+                {warningOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded border border-yellow-700/40 bg-[#0d0d0d] shadow-panel">
+                    <div className="border-b border-yellow-700/30 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-yellow-400">
+                      Warnings
+                    </div>
+                    <ul className="max-h-72 overflow-y-auto divide-y divide-gray-800/60">
+                      {allWarnings.map((w, i) => (
+                        <li key={i} className="flex items-start gap-2 px-4 py-2.5 text-sm text-yellow-200">
+                          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-yellow-400" />
+                          {w}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
 
             {updateCount > 0 && (
@@ -144,22 +181,49 @@ export default function Layout() {
               </NavLink>
             )}
 
-            <NavLink
-              to="/utilities"
-              title={queueCount > 0 ? `${queueCount} queued job${queueCount === 1 ? '' : 's'}` : 'Queue'}
-              className={({ isActive }) =>
-                `relative hidden items-center transition-colors sm:flex ${
-                  isActive ? 'text-blue-500' : 'text-gray-400 hover:text-gray-200'
-                }`
-              }
-            >
-              <Bell size={18} />
-              {queueCount > 0 && (
-                <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white">
-                  {queueCount > 99 ? '99+' : queueCount}
-                </span>
+            <div ref={bellRef} className="relative hidden sm:block">
+              <button
+                type="button"
+                title={queueCount > 0 ? `${queueCount} queued job${queueCount === 1 ? '' : 's'}` : 'Queue'}
+                onClick={() => { setBellOpen(o => !o); setWarningOpen(false); }}
+                className={`relative flex items-center transition-colors ${bellOpen ? 'text-blue-500' : 'text-gray-400 hover:text-gray-200'}`}
+              >
+                <Bell size={18} />
+                {queueCount > 0 && (
+                  <span className="absolute -right-2 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-semibold leading-none text-white">
+                    {queueCount > 99 ? '99+' : queueCount}
+                  </span>
+                )}
+              </button>
+              {bellOpen && (
+                <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded border border-shoko-line bg-[#0d0d0d] shadow-panel">
+                  <div className="border-b border-gray-800/60 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-400">
+                    Queue — {queueCount} job{queueCount === 1 ? '' : 's'}
+                  </div>
+                  {runningJobs.length > 0 ? (
+                    <ul className="max-h-64 overflow-y-auto divide-y divide-gray-800/40">
+                      {runningJobs.map((job, i) => (
+                        <li key={i} className="flex items-center gap-2 px-4 py-2.5 text-sm">
+                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-green-400" />
+                          <span className="min-w-0 truncate text-gray-200">{job.Title || job.Type}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="px-4 py-3 text-sm text-gray-500">No jobs currently running.</p>
+                  )}
+                  <div className="border-t border-gray-800/60 px-4 py-2">
+                    <NavLink
+                      to="/utilities"
+                      onClick={() => setBellOpen(false)}
+                      className="text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      View full queue →
+                    </NavLink>
+                  </div>
+                </div>
               )}
-            </NavLink>
+            </div>
 
             <div className="hidden items-center gap-2 text-sm text-gray-300 sm:flex" title={username}>
               <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-500 text-sm font-semibold text-black">
